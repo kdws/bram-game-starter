@@ -1,30 +1,95 @@
 import Phaser from 'phaser';
 import { Palette } from './palette';
+import {
+  BRAM_SKELETON_ATLAS,
+  BRAM_SKELETON_META,
+  bramSkeletonReady
+} from './sprites/bramSkeletonAtlas';
+
+// The procedural Bram was drawn at ~80px tall at scale 1.0. The atlas sprite
+// is 192×192 with ~120px of visible character. Multiplying by this base scale
+// keeps existing scene layouts (which were tuned against the procedural size)
+// roughly correct without touching every call site.
+const SPRITE_BASE_SCALE = 0.7;
+
+// Container-local y at which the procedural Bram's feet sat. We place the
+// sprite's bottom-center pivot here so the new art stands on the same line
+// the procedural drawing stood on.
+const FEET_OFFSET_Y = 38;
+
+interface BramOptions {
+  skateboard?: boolean;
+  scale?: number;
+}
 
 export class Bram extends Phaser.GameObjects.Container {
-  private bones: Phaser.GameObjects.Graphics;
-  private board?: Phaser.GameObjects.Graphics;
-  private humanGlow = false;
+  // Sprite mode
+  private sprite?: Phaser.GameObjects.Sprite;
+  private spriteGlow?: Phaser.GameObjects.Graphics;
+  private idleKey: 'bram_skeleton_idle' | 'bram_skeleton_skate_ride';
 
-  constructor(scene: Phaser.Scene, x: number, y: number, options: { skateboard?: boolean; scale?: number } = {}) {
+  // Procedural fallback mode (kept for v0.1 safety; remove once atlas is locked)
+  private bones?: Phaser.GameObjects.Graphics;
+  private board?: Phaser.GameObjects.Graphics;
+
+  private humanGlow = false;
+  private hasSkateboard: boolean;
+  private busyAnim = false;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, options: BramOptions = {}) {
     super(scene, x, y);
     scene.add.existing(this);
-    this.bones = scene.add.graphics();
+    this.hasSkateboard = !!options.skateboard;
+    this.idleKey = this.hasSkateboard ? 'bram_skeleton_skate_ride' : 'bram_skeleton_idle';
+
+    if (bramSkeletonReady(scene)) {
+      this.initSpriteMode();
+    } else {
+      this.initProceduralMode();
+    }
+
+    this.setScale(options.scale ?? 1);
+  }
+
+  // ---------- sprite mode ----------
+
+  private initSpriteMode() {
+    const glow = this.scene.add.graphics();
+    this.add(glow);
+    this.spriteGlow = glow;
+
+    const sprite = this.scene.add.sprite(0, FEET_OFFSET_Y, BRAM_SKELETON_ATLAS, 'idle_0001');
+    sprite.setOrigin(BRAM_SKELETON_META.origin.x, BRAM_SKELETON_META.origin.y);
+    sprite.setScale(SPRITE_BASE_SCALE);
+    sprite.play(this.idleKey);
+    this.add(sprite);
+    this.sprite = sprite;
+  }
+
+  private updateSpriteGlow() {
+    if (!this.spriteGlow) return;
+    this.spriteGlow.clear();
+    if (!this.humanGlow) return;
+    this.spriteGlow.fillStyle(Palette.glow, 0.32);
+    this.spriteGlow.fillCircle(0, -18, 64);
+    this.spriteGlow.fillStyle(Palette.glow, 0.16);
+    this.spriteGlow.fillCircle(0, -18, 92);
+  }
+
+  // ---------- procedural fallback ----------
+
+  private initProceduralMode() {
+    this.bones = this.scene.add.graphics();
     this.add(this.bones);
-    if (options.skateboard) {
-      this.board = scene.add.graphics();
+    if (this.hasSkateboard) {
+      this.board = this.scene.add.graphics();
       this.add(this.board);
     }
-    this.setScale(options.scale ?? 1);
-    this.redraw();
+    this.redrawProcedural();
   }
 
-  setWarmGlow(enabled: boolean) {
-    this.humanGlow = enabled;
-    this.redraw();
-  }
-
-  redraw() {
+  private redrawProcedural() {
+    if (!this.bones) return;
     this.bones.clear();
     if (this.board) {
       this.board.clear();
@@ -61,7 +126,29 @@ export class Bram extends Phaser.GameObjects.Container {
     this.bones.fillCircle(26, 38, 5);
   }
 
+  // ---------- public API (preserved across modes) ----------
+
+  setWarmGlow(enabled: boolean) {
+    this.humanGlow = enabled;
+    if (this.sprite) {
+      this.updateSpriteGlow();
+    } else {
+      this.redrawProcedural();
+    }
+  }
+
+  redraw() {
+    if (this.sprite) {
+      this.updateSpriteGlow();
+    } else {
+      this.redrawProcedural();
+    }
+  }
+
   celebrate() {
+    if (this.sprite) {
+      this.playOnce('bram_skeleton_celebrate');
+    }
     this.scene.tweens.add({ targets: this, y: this.y - 18, yoyo: true, duration: 180, ease: 'Sine.easeOut' });
     this.scene.tweens.add({ targets: this, rotation: 0.08, yoyo: true, duration: 120, repeat: 1 });
     this.setWarmGlow(true);
@@ -69,12 +156,49 @@ export class Bram extends Phaser.GameObjects.Container {
   }
 
   fallApart() {
+    if (this.sprite) {
+      this.playFallApartChain();
+      return;
+    }
+    this.fallApartProcedural();
+  }
+
+  private playOnce(animKey: string) {
+    if (!this.sprite || this.busyAnim) return;
+    if (!this.scene.anims.exists(animKey)) return;
+    this.busyAnim = true;
+    this.sprite.play(animKey);
+    this.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.busyAnim = false;
+      this.sprite?.play(this.idleKey);
+    });
+  }
+
+  private playFallApartChain() {
+    if (!this.sprite || this.busyAnim) return;
+    if (!this.scene.anims.exists('bram_skeleton_fall_apart')) return;
+    this.busyAnim = true;
+    const sprite = this.sprite;
+    sprite.play('bram_skeleton_fall_apart');
+    sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (this.scene.anims.exists('bram_skeleton_reassemble')) {
+        sprite.play('bram_skeleton_reassemble');
+        sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+          this.busyAnim = false;
+          sprite.play(this.idleKey);
+        });
+      } else {
+        this.busyAnim = false;
+        sprite.play(this.idleKey);
+      }
+    });
+  }
+
+  private fallApartProcedural() {
     this.visible = false;
-    const pieces: Phaser.GameObjects.Shape[] = [];
     const offsets = [[0,-42],[-15,-4],[15,-4],[0,14],[-25,28],[25,28],[-35,5],[35,5]];
     for (const [ox, oy] of offsets) {
       const p = this.scene.add.circle(this.x + ox * this.scaleX, this.y + oy * this.scaleY, Phaser.Math.Between(5, 12), Palette.bone);
-      pieces.push(p);
       this.scene.tweens.add({
         targets: p,
         x: p.x + Phaser.Math.Between(-90, 90),

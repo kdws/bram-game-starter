@@ -77,19 +77,44 @@ Texture Atlas  →  Phaser Animation Registry  →  Scene Integration
 
 ## Current stage
 
-The artwork collection in `assets/artwork/` is at the
-**Concept Art / Model Reference** stage.
+| Asset | Stage | Location |
+|---|---|---|
+| Concept collection | Concept Art | `assets/artwork/` (gitignored) |
+| Bram Skeleton v0.1 | **Atlas + Scene Integration** ✅ | `public/assets/sprites/bram/skeleton/` |
+| Bram Human | Concept | reference sheet only |
+| Nilo (alien + human) | Concept | reference sheet only |
+| Owl | Concept | reference sheet only |
+| Tilesets, props, UI | Concept | reference sheet only |
 
-No locked model sheet, no clean sprite sheet, and no atlas exists
-yet. Until those exist, the runtime keeps using procedural
-`Graphics` drawings.
+## Runtime asset path convention
+
+Production-served assets live under `public/assets/...`. Vite's
+dev server serves them directly, and the production build copies
+them verbatim into `dist/assets/...`. Reference them in Phaser
+loaders by their absolute URL, e.g.:
+
+```ts
+scene.load.atlas(
+  'BRAM_SKELETON_ATLAS',
+  '/assets/sprites/bram/skeleton/bram_skeleton_atlas.png',
+  '/assets/sprites/bram/skeleton/bram_skeleton_atlas.json'
+);
+```
+
+Do **not** put runtime assets in the project-root `assets/`
+directory — those are not copied into the production build. That
+path is reserved for concept-only material (and it's gitignored).
 
 ---
 
-## First real asset: Bram Skeleton Side-Scroller v0.1
+## First real asset: Bram Skeleton Side-Scroller v0.1 ✅ shipped
 
-This is the first sprite sheet to produce. Everything else
-follows from this — Bram is the most-shown character in the slice.
+Status: **shipped at v0.1**. Files live in
+`public/assets/sprites/bram/skeleton/`. Loaded and registered in
+`BootScene`; rendered through `src/game/Bram.ts` (which keeps a
+procedural fallback in case the atlas fails to load). Replace the
+v0.1 art when the painterly pass is ready — names, frame counts,
+pivot, and hitbox must stay identical.
 
 ### File specs
 

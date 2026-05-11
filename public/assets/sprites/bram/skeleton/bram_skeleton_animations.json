@@ -1,0 +1,143 @@
+{
+  "atlasKey": "BRAM_SKELETON_ATLAS",
+  "texture": "bram_skeleton_atlas.png",
+  "atlas": "bram_skeleton_atlas.json",
+  "frameWidth": 192,
+  "frameHeight": 192,
+  "origin": {
+    "x": 0.5,
+    "y": 0.875
+  },
+  "recommendedScale": 1,
+  "hitbox": {
+    "x": 72,
+    "y": 34,
+    "w": 56,
+    "h": 132
+  },
+  "animations": {
+    "bram_skeleton_idle": {
+      "frames": [
+        "idle_0001",
+        "idle_0002",
+        "idle_0003",
+        "idle_0004"
+      ],
+      "frameRate": 5,
+      "repeat": -1
+    },
+    "bram_skeleton_walk": {
+      "frames": [
+        "walk_0001",
+        "walk_0002",
+        "walk_0003",
+        "walk_0004",
+        "walk_0005",
+        "walk_0006"
+      ],
+      "frameRate": 9,
+      "repeat": -1
+    },
+    "bram_skeleton_run": {
+      "frames": [
+        "run_0001",
+        "run_0002",
+        "run_0003",
+        "run_0004",
+        "run_0005",
+        "run_0006"
+      ],
+      "frameRate": 12,
+      "repeat": -1
+    },
+    "bram_skeleton_jump_takeoff": {
+      "frames": [
+        "jump_takeoff_0001"
+      ],
+      "frameRate": 1,
+      "repeat": 0
+    },
+    "bram_skeleton_jump_midair": {
+      "frames": [
+        "jump_midair_0001"
+      ],
+      "frameRate": 1,
+      "repeat": 0
+    },
+    "bram_skeleton_land": {
+      "frames": [
+        "land_0001"
+      ],
+      "frameRate": 1,
+      "repeat": 0
+    },
+    "bram_skeleton_crouch": {
+      "frames": [
+        "crouch_0001"
+      ],
+      "frameRate": 1,
+      "repeat": 0
+    },
+    "bram_skeleton_celebrate": {
+      "frames": [
+        "celebrate_0001",
+        "celebrate_0002",
+        "celebrate_0003"
+      ],
+      "frameRate": 6,
+      "repeat": 0
+    },
+    "bram_skeleton_fall_apart": {
+      "frames": [
+        "fall_apart_0001",
+        "fall_apart_0002",
+        "fall_apart_0003",
+        "fall_apart_0004",
+        "fall_apart_0005",
+        "fall_apart_0006"
+      ],
+      "frameRate": 10,
+      "repeat": 0
+    },
+    "bram_skeleton_reassemble": {
+      "frames": [
+        "reassemble_0001",
+        "reassemble_0002",
+        "reassemble_0003",
+        "reassemble_0004",
+        "reassemble_0005",
+        "reassemble_0006"
+      ],
+      "frameRate": 10,
+      "repeat": 0
+    },
+    "bram_skeleton_skate_push": {
+      "frames": [
+        "skate_push_0001",
+        "skate_push_0002",
+        "skate_push_0003",
+        "skate_push_0004"
+      ],
+      "frameRate": 8,
+      "repeat": -1
+    },
+    "bram_skeleton_skate_ride": {
+      "frames": [
+        "skate_ride_0001",
+        "skate_ride_0002"
+      ],
+      "frameRate": 4,
+      "repeat": -1
+    },
+    "bram_skeleton_skate_ollie": {
+      "frames": [
+        "skate_ollie_0001",
+        "skate_ollie_0002",
+        "skate_ollie_0003",
+        "skate_ollie_0004"
+      ],
+      "frameRate": 8,
+      "repeat": 0
+    }
+  }
+}
