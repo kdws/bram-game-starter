@@ -256,13 +256,35 @@ happen. They replace the bottom-of-title tip line in place:
 Each hint fires once per scene visit; later events of the same
 kind do not re-fire.
 
-### Push block visual
+### Visual direction (v0.2 procedural pass)
 
-Push blocks are drawn as a mossy grey stone with small moss
-tufts on top and gold push-direction arrows on the left and
-right edges. This makes them clearly distinct from the
-warm-brown bark walls. (See `drawCell()` in
-`GridPuzzleLabScene.ts`.)
+Procedural tile visuals were tuned to match the local concept
+reference packs (see `ASSET_INTEGRATION_MANIFEST.md` and
+`ART_REFERENCE_INDEX.md`):
+
+- **Walls** — mossy grey stone with moss/vine tufts along the
+  top edge. Subtle mortar joint across the middle.
+- **Floor** — warm sandy stone tile with a faint inner highlight.
+- **Repair stones** — blue gem on a small shadowed base, with a
+  pale highlight. Reads as Nilo's potential in physical form.
+- **Empty socket** — recessed dark stone with a faint blue inner
+  ring showing where the energy belongs.
+- **Filled socket** — glowing blue circle with a bright pale-blue
+  center and a wider soft halo. Nilo's energy "remembered."
+- **Push block** — mossy grey boulder with denser moss tufts and
+  gold push-direction arrows on the left and right edges. Clearly
+  distinct from both walls (square, lighter moss) and stones
+  (round, blue).
+- **Exit (closed)** — stone arch with a wooden door, metal
+  banding, and a small keyhole.
+- **Exit (open)** — blue glowing portal under the same stone arch
+  shape, with a pale catchlight inside.
+
+Color rule of thumb: **blue = Nilo's energy / repair**, **gold =
+Bram's Life Sparks / victory warmth**. Sockets, repair stones,
+the open exit, and in-world pickup/repair VFX use the blue
+palette. The success panel and Bram's celebration use the warm
+gold/parchment palette.
 
 ### Player flow
 

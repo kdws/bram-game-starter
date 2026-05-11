@@ -102,6 +102,8 @@ grid sizes (see `MAP_PIPELINE.md` and `ASSET_PIPELINE.md`).
 
 ---
 
+---
+
 ## 05 — Video and Reference Frames
 
 **Path:** `assets/artwork/bram_artwork_collection/05_video_and_reference_frames/`
@@ -119,3 +121,49 @@ do not embed in the game.
 
 The MP4 is never to be committed to the repo and never to be
 served at runtime.
+
+---
+
+## 06 — Grid Puzzle Reference Pack (2026-05-11)
+
+**Path:** `assets/artwork/bram_grid_puzzle_asset_pack/`
+
+**Purpose:** visual direction for the Grid Puzzle Lab and future
+Zelda / Chip's Challenge-style repair rooms. Consumed by the v0.2
+procedural visual pass in `GridPuzzleLabScene.ts`. See also
+`docs/ASSET_INTEGRATION_MANIFEST.md`.
+
+| File | Use as reference for |
+|---|---|
+| `01_grid_tiles/fantasy_game_tile_set_concept_layout.png` | Mossy stone walls, warm tile floors, bridge planks with blue-glow accents, water edges, recessed sockets, stone-arch doors. |
+| `02_grid_props/fantasy_game_asset_collection_sheet.png` | Repair stones, keys, pressure plates, lanterns, crates, numbered stones, bells, gates. |
+| `03_ui_and_effects/whimsical_fantasy_rpg_ui_assets.png` | Parchment UI, buttons, hint portraits, undo/reset controls, spark effects, success banners. |
+| `04_puzzle_room_reference/fantasy_dungeon_puzzle_concept_art.png` | Full top-down puzzle-room composition + step-by-step puzzle flow. |
+
+**Do not** treat as final runtime sprites. The current procedural
+`drawCell()` in `GridPuzzleLabScene.ts` references these sheets
+as art direction. Final production tilesets must be redrawn or
+sliced into transparent, consistent-scale PNGs and placed under
+`public/assets/tilesets/rattlewood_grid/` (or similar).
+
+---
+
+## 07 — "Final Runtime" Reference Pack (2026-05-11)
+
+**Path:** `assets/artwork/bram_final_runtime_assets_pack/`
+
+**Purpose:** despite the folder name, these are **also concept
+sheets**, not runtime-ready sprites. They are a second pass over
+the same domains as pack 06 (tileset, props, UI, VFX) and serve
+as additional visual direction.
+
+| File | Use as reference for |
+|---|---|
+| `01_tileset/fantasy_rpg_tileset_grid_layout.png` | Top-down grid tile reference (alternate pass). |
+| `02_props_tokens/fantasy_environment_props_and_tokens_sheet.png` | Props and puzzle tokens (alternate pass). |
+| `03_ui_kit/fantasy_adventure_game_ui_kit_design.png` | Parchment UI kit. |
+| `04_vfx/fantasy_game_vfx_sprite_sheet_grid.png` | Repair / spark / glow VFX. |
+
+**Do not** treat as final runtime sprites either. Same pipeline
+rule — slice/redraw into clean transparent sheets under
+`public/assets/...` when ready.

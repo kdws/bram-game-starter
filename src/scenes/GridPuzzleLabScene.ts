@@ -236,61 +236,88 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     const cy = py + TILE / 2;
     const g = this.tileGraphics;
 
+    // --- Wall: mossy grey stone with moss/vines along the top edge.
     if (cell === 'wall') {
-      g.fillStyle(Palette.bark, 1);
+      g.fillStyle(0x3a3a30, 1);
       g.fillRect(px, py, TILE, TILE);
-      g.lineStyle(1, 0x2a1808, 1);
+      g.fillStyle(0x4a4a3e, 1);
+      g.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+      g.lineStyle(1, 0x1a1a14, 0.85);
       g.strokeRect(px, py, TILE, TILE);
-      g.lineStyle(2, Palette.parchmentDark, 0.45);
-      g.lineBetween(px + 4, py + 4, px + TILE - 4, py + 4);
-      g.lineBetween(px + 4, py + TILE - 4, px + TILE - 4, py + TILE - 4);
+      // mortar joint
+      g.lineStyle(1, 0x2a2a22, 0.8);
+      g.lineBetween(px + 4, py + 22, px + TILE - 4, py + 22);
+      // moss tufts on the top edge
+      g.fillStyle(Palette.moss, 1);
+      g.fillEllipse(px + 14, py + 4, 16, 6);
+      g.fillEllipse(px + TILE - 14, py + 6, 14, 5);
+      g.fillStyle(Palette.leaf, 0.85);
+      g.fillCircle(px + 12, py + 3, 2);
+      g.fillCircle(px + TILE - 16, py + 5, 1.6);
       return;
     }
 
-    // walkable floor base
-    g.fillStyle(0x2a2218, 0.95);
+    // --- Floor: warm sandy stone tile.
+    g.fillStyle(0x4a3a28, 1);
     g.fillRect(px, py, TILE, TILE);
-    g.lineStyle(1, 0x3a2e1f, 0.45);
-    g.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+    g.fillStyle(0x5a4634, 0.55);
+    g.fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
+    g.lineStyle(1, 0x2a1f15, 0.7);
+    g.strokeRect(px, py, TILE, TILE);
 
     if (cell === 'stone') {
-      g.fillStyle(Palette.gold, 1);
+      // Blue repair gem — Nilo's potential, ready to be placed.
+      g.fillStyle(0x1a2a3a, 0.6);
+      g.fillEllipse(cx, cy + 4, 18, 5);
+      g.fillStyle(0x4a78a8, 1);
       g.fillCircle(cx, cy, 11);
-      g.lineStyle(2, Palette.parchmentDark, 1);
+      g.fillStyle(0x6fb5e8, 1);
+      g.fillCircle(cx, cy, 9);
+      g.lineStyle(2, 0xc8e6ff, 1);
       g.strokeCircle(cx, cy, 11);
-      g.fillStyle(0xfff5d8, 0.7);
+      g.fillStyle(0xeaf6ff, 0.85);
       g.fillCircle(cx - 3, cy - 3, 3);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(cx - 4, cy - 4, 1.4);
     } else if (cell === 'socket_empty') {
+      // Recessed socket — dark stone with a faint blue hint
+      // showing where Nilo's energy belongs.
       g.fillStyle(0x14110d, 0.95);
-      g.fillCircle(cx, cy, 14);
-      g.lineStyle(2, Palette.parchmentDark, 0.7);
-      g.strokeCircle(cx, cy, 14);
-      g.lineStyle(2, 0x6a4030, 0.6);
-      g.lineBetween(cx - 7, cy - 7, cx + 7, cy + 7);
-      g.lineBetween(cx - 7, cy + 7, cx + 7, cy - 7);
+      g.fillCircle(cx, cy, 15);
+      g.lineStyle(2, 0x2a2218, 1);
+      g.strokeCircle(cx, cy, 15);
+      g.fillStyle(0x4a78a8, 0.18);
+      g.fillCircle(cx, cy, 11);
+      g.lineStyle(1, 0x6fb5e8, 0.5);
+      g.strokeCircle(cx, cy, 8);
     } else if (cell === 'socket_filled') {
-      g.fillStyle(Palette.glow, 0.85);
-      g.fillCircle(cx, cy, 14);
-      g.lineStyle(2, Palette.gold, 1);
-      g.strokeCircle(cx, cy, 14);
-      g.fillStyle(0xfff5d8, 0.9);
-      g.fillCircle(cx - 3, cy - 3, 3);
+      // Filled — Nilo's blue energy holding the stone in place.
+      g.fillStyle(0x6fb5e8, 0.32);
+      g.fillCircle(cx, cy, 19);
+      g.fillStyle(0x6fb5e8, 0.85);
+      g.fillCircle(cx, cy, 13);
+      g.lineStyle(2, 0xc8e6ff, 1);
+      g.strokeCircle(cx, cy, 13);
+      g.fillStyle(0xeaf6ff, 0.95);
+      g.fillCircle(cx, cy, 5);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(cx - 2, cy - 2, 2);
     } else if (cell === 'push_block') {
-      // mossy grey stone block — distinct from warm-brown walls
-      g.fillStyle(0x4a4a3a, 1);
-      g.fillRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 6);
+      // Mossy boulder — clearly distinct from walls and floor.
+      g.fillStyle(0x3a3a30, 1);
+      g.fillRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 8);
       g.lineStyle(2, 0x1a1a14, 1);
-      g.strokeRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 6);
-      // top highlight (catches light)
-      g.fillStyle(0x6a6a58, 0.7);
-      g.fillRoundedRect(px + 7, py + 9, TILE - 18, 5, 3);
-      // moss tufts on top
+      g.strokeRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 8);
+      // top stone face highlight
+      g.fillStyle(0x5a5a4a, 0.7);
+      g.fillRoundedRect(px + 7, py + 9, TILE - 18, 6, 4);
+      // moss tufts on top (denser than wall moss to read as "movable boulder")
       g.fillStyle(Palette.moss, 1);
-      g.fillEllipse(cx - 7, py + 12, 10, 4);
-      g.fillStyle(Palette.leaf, 0.85);
+      g.fillEllipse(cx - 7, py + 12, 12, 5);
+      g.fillEllipse(cx + 8, py + 14, 8, 3);
+      g.fillStyle(Palette.leaf, 0.9);
       g.fillCircle(cx - 9, py + 11, 1.8);
-      g.fillStyle(Palette.moss, 0.85);
-      g.fillEllipse(cx + 8, py + 13, 7, 3);
+      g.fillCircle(cx + 9, py + 13, 1.4);
       // push-direction hints on left/right edges
       g.fillStyle(Palette.gold, 0.65);
       g.fillTriangle(px + 8, cy - 3, px + 8, cy + 3, px + 13, cy);
@@ -298,22 +325,39 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     } else if (cell === 'exit') {
       const open = this.engine.allSocketsRepaired();
       if (open) {
-        g.fillStyle(Palette.glow, 0.35);
-        g.fillRoundedRect(px + 4, py + 4, TILE - 8, TILE - 8, 8);
-        g.lineStyle(3, Palette.gold, 1);
-        g.strokeRoundedRect(px + 4, py + 4, TILE - 8, TILE - 8, 8);
-        g.lineStyle(2, Palette.gold, 0.85);
+        // Blue glowing portal under a stone arch — Nilo's energy
+        // making the way safe to cross.
+        g.fillStyle(0x6fb5e8, 0.25);
+        g.fillRoundedRect(px + 2, py + 2, TILE - 4, TILE - 4, 10);
+        g.fillStyle(0x6fb5e8, 0.55);
+        g.fillRoundedRect(px + 6, py + 8, TILE - 12, TILE - 14, 9);
+        g.lineStyle(3, 0xc8e6ff, 1);
+        g.strokeRoundedRect(px + 6, py + 8, TILE - 12, TILE - 14, 9);
+        // arch highlight
+        g.lineStyle(2, 0xeaf6ff, 0.85);
         g.beginPath();
-        g.arc(cx, cy + 6, 13, Math.PI, 0, false);
+        g.arc(cx, cy + 4, 13, Math.PI, 0, false);
         g.strokePath();
+        // catchlight at center
+        g.fillStyle(0xffffff, 0.6);
+        g.fillEllipse(cx, cy - 2, 10, 14);
       } else {
-        g.fillStyle(Palette.ink, 0.85);
-        g.fillRoundedRect(px + 4, py + 4, TILE - 8, TILE - 8, 8);
-        g.lineStyle(2, Palette.parchmentDark, 0.85);
-        g.strokeRoundedRect(px + 4, py + 4, TILE - 8, TILE - 8, 8);
-        g.lineStyle(2, Palette.boneShadow, 0.9);
-        g.lineBetween(px + 8, cy, px + TILE - 8, cy);
-        g.lineBetween(cx, py + 8, cx, py + TILE - 8);
+        // Closed wooden door inside a stone arch.
+        g.fillStyle(0x4a4a3e, 1);
+        g.fillRoundedRect(px + 4, py + 6, TILE - 8, TILE - 10, 9);
+        g.lineStyle(2, 0x1a1a14, 1);
+        g.strokeRoundedRect(px + 4, py + 6, TILE - 8, TILE - 10, 9);
+        // wooden door
+        g.fillStyle(0x3a261a, 1);
+        g.fillRoundedRect(px + 8, py + 10, TILE - 16, TILE - 16, 5);
+        g.lineStyle(1, 0x1a1008, 1);
+        g.strokeRoundedRect(px + 8, py + 10, TILE - 16, TILE - 16, 5);
+        // metal banding
+        g.fillStyle(0x4a4036, 1);
+        g.fillRect(px + 8, cy - 2, TILE - 16, 3);
+        // keyhole
+        g.fillStyle(0x14110d, 1);
+        g.fillCircle(cx, cy, 1.8);
       }
     }
   }
@@ -350,11 +394,12 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   }
 
   private spawnPickupSparkle(x: number, y: number) {
+    // Pale-blue sparkles — Nilo's potential moving with the stone.
     for (let i = 0; i < 6; i++) {
       const s = this.add.text(x, y, '✦', {
         fontFamily: 'Georgia, serif',
         fontSize: '14px',
-        color: '#ffdf7a'
+        color: '#c8e6ff'
       }).setOrigin(0.5).setDepth(50);
       const a = (i / 6) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
       this.tweens.add({
@@ -369,9 +414,10 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   }
 
   private spawnRepairBurst(x: number, y: number) {
+    // Blue ring burst — Nilo's energy taking hold in the socket.
     const halo = this.add.graphics().setDepth(40);
-    halo.fillStyle(Palette.glow, 0.45).fillCircle(x, y, 24);
-    halo.fillStyle(Palette.glow, 0.22).fillCircle(x, y, 40);
+    halo.fillStyle(0x6fb5e8, 0.5).fillCircle(x, y, 24);
+    halo.fillStyle(0xc8e6ff, 0.25).fillCircle(x, y, 42);
     this.tweens.add({
       targets: halo,
       alpha: 0,
@@ -382,7 +428,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       fontFamily: 'Georgia, serif',
       fontStyle: 'italic',
       fontSize: '14px',
-      color: '#ffdf7a'
+      color: '#c8e6ff'
     }).setDepth(50);
     this.tweens.add({
       targets: tick,
