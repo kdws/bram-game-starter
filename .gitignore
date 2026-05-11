@@ -2,3 +2,9 @@ node_modules/
 dist/
 .env
 *.local
+
+# Local pre-production artwork collection (concept/reference only).
+# See docs/ART_REFERENCE_INDEX.md for what lives here.
+# Final production assets must be recreated as transparent sprite sheets,
+# tilemaps, atlases, SVGs, or Spine rigs and committed under a separate path.
+assets/artwork/
