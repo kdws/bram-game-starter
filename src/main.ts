@@ -9,6 +9,7 @@ import { TopDownScene } from './scenes/TopDownScene';
 import { RestorationScene } from './scenes/RestorationScene';
 import { EndOfSliceScene } from './scenes/EndOfSliceScene';
 import { ClockTowerScene } from './scenes/ClockTowerScene';
+import { GridPuzzleLabScene } from './scenes/GridPuzzleLabScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -39,7 +40,8 @@ const config: Phaser.Types.Core.GameConfig = {
     TopDownScene,
     RestorationScene,
     EndOfSliceScene,
-    ClockTowerScene
+    ClockTowerScene,
+    GridPuzzleLabScene
   ]
 };
 

@@ -1,0 +1,279 @@
+import {
+  CellType,
+  Direction,
+  EngineState,
+  GridMap,
+  MoveResult,
+  TilePos
+} from './GridTypes';
+
+/**
+ * Pure (Phaser-free) state machine for a grid puzzle room. Owns the grid,
+ * Bram's position, inventory, and an undo stack. Scenes call `tryMove`,
+ * `undo`, `reset` and read the state via the getters.
+ *
+ * Rules in v0.1:
+ *  - Bram moves one tile at a time.
+ *  - Walking into a wall: bump (no move, facing still updates).
+ *  - Walking onto a stone: collect (+1 inventory), cell becomes floor.
+ *  - Walking onto an empty socket: if carrying ≥ 1 stone, fill it (cell
+ *    becomes socket_filled, inventory -1) and step onto it. Otherwise bump.
+ *  - Walking onto a filled socket: passable (acts like floor).
+ *  - Walking onto a push block: if the cell beyond is floor or exit, push
+ *    the block into it and step into the vacated cell. Otherwise bump.
+ *  - Walking onto exit: always allowed. "Solved" only fires when all
+ *    sockets are filled AND Bram is standing on exit.
+ *
+ * No death, no lives. Every mutation pushes a snapshot onto the undo
+ * stack, including bumps (so undo also un-rotates Bram if needed).
+ */
+const DEFAULT_LEGEND: Record<string, CellType | 'start'> = {
+  '#': 'wall',
+  '.': 'floor',
+  ' ': 'floor',
+  'E': 'exit',
+  's': 'stone',
+  'o': 'socket_empty',
+  'b': 'push_block',
+  'B': 'start'
+};
+
+export class GridPuzzleEngine {
+  private readonly initial: EngineState;
+  private state: EngineState;
+  private readonly undoStack: EngineState[] = [];
+
+  constructor(map: GridMap) {
+    this.initial = this.parseMap(map.ascii);
+    this.state = this.cloneState(this.initial);
+  }
+
+  // ---------- read ----------
+
+  get width(): number {
+    return this.state.grid[0]?.length ?? 0;
+  }
+  get height(): number {
+    return this.state.grid.length;
+  }
+  get bram(): TilePos {
+    return { ...this.state.bram };
+  }
+  get bramFacing(): Direction {
+    return this.state.bramFacing;
+  }
+  get stonesCarried(): number {
+    return this.state.stonesCarried;
+  }
+  get canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  getCell(x: number, y: number): CellType {
+    if (y < 0 || y >= this.state.grid.length) return 'wall';
+    const row = this.state.grid[y];
+    if (x < 0 || x >= row.length) return 'wall';
+    return row[x];
+  }
+
+  countCells(type: CellType): number {
+    let n = 0;
+    for (const row of this.state.grid) {
+      for (const c of row) if (c === type) n++;
+    }
+    return n;
+  }
+
+  countInitial(type: CellType): number {
+    let n = 0;
+    for (const row of this.initial.grid) {
+      for (const c of row) if (c === type) n++;
+    }
+    return n;
+  }
+
+  /** Sockets that started life empty and are now repaired. */
+  countSocketsRepaired(): number {
+    return this.countCells('socket_filled');
+  }
+
+  /** Sockets that started empty in the map. */
+  countSocketsTotal(): number {
+    // Initial empty + initial filled (none initially, but future-proof).
+    return this.countInitial('socket_empty') + this.countInitial('socket_filled');
+  }
+
+  allSocketsRepaired(): boolean {
+    return this.countCells('socket_empty') === 0
+        && this.countSocketsTotal() > 0;
+  }
+
+  isBramOnExit(): boolean {
+    return this.getCell(this.state.bram.x, this.state.bram.y) === 'exit';
+  }
+
+  get isSolved(): boolean {
+    return this.allSocketsRepaired() && this.isBramOnExit();
+  }
+
+  /** Snapshot of the live grid (read-only copy). */
+  snapshotGrid(): CellType[][] {
+    return this.state.grid.map(row => row.slice());
+  }
+
+  // ---------- write ----------
+
+  tryMove(dir: Direction): MoveResult {
+    const result: MoveResult = {
+      moved: false,
+      bumped: false,
+      collectedStone: false,
+      filledSocket: false,
+      pushedBlock: false,
+      reachedExit: false,
+      solved: false
+    };
+
+    const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0;
+    const dy = dir === 'up' ? -1 : dir === 'down' ? 1 : 0;
+    const nx = this.state.bram.x + dx;
+    const ny = this.state.bram.y + dy;
+    const target = this.getCell(nx, ny);
+
+    // Always capture a snapshot before any mutation so undo can restore
+    // facing, position, inventory, and grid.
+    const snapshot = this.cloneState(this.state);
+    let mutated = false;
+
+    // Facing follows the attempted direction even on a bump — feels good
+    // and lets Bram "look" at obstacles.
+    if (this.state.bramFacing !== dir) {
+      this.state.bramFacing = dir;
+      mutated = true;
+    }
+
+    if (target === 'wall') {
+      result.bumped = true;
+      if (mutated) this.undoStack.push(snapshot);
+      return result;
+    }
+
+    if (target === 'push_block') {
+      const bx = nx + dx;
+      const by = ny + dy;
+      const beyond = this.getCell(bx, by);
+      if (beyond !== 'floor' && beyond !== 'exit') {
+        result.bumped = true;
+        if (mutated) this.undoStack.push(snapshot);
+        return result;
+      }
+      this.state.grid[by][bx] = 'push_block';
+      this.state.grid[ny][nx] = 'floor';
+      this.state.bram = { x: nx, y: ny };
+      result.pushedBlock = true;
+      result.moved = true;
+      this.finalizeMove(result, snapshot);
+      return result;
+    }
+
+    if (target === 'socket_empty') {
+      if (this.state.stonesCarried <= 0) {
+        result.bumped = true;
+        if (mutated) this.undoStack.push(snapshot);
+        return result;
+      }
+      this.state.stonesCarried -= 1;
+      this.state.grid[ny][nx] = 'socket_filled';
+      result.filledSocket = true;
+      this.state.bram = { x: nx, y: ny };
+      result.moved = true;
+      this.finalizeMove(result, snapshot);
+      return result;
+    }
+
+    if (target === 'stone') {
+      this.state.stonesCarried += 1;
+      this.state.grid[ny][nx] = 'floor';
+      result.collectedStone = true;
+    }
+
+    if (target === 'exit') {
+      result.reachedExit = true;
+    }
+
+    this.state.bram = { x: nx, y: ny };
+    result.moved = true;
+    this.finalizeMove(result, snapshot);
+    return result;
+  }
+
+  undo(): boolean {
+    const prev = this.undoStack.pop();
+    if (!prev) return false;
+    this.state = prev;
+    return true;
+  }
+
+  reset(): void {
+    this.state = this.cloneState(this.initial);
+    this.undoStack.length = 0;
+  }
+
+  // ---------- internals ----------
+
+  private finalizeMove(result: MoveResult, snapshot: EngineState): void {
+    if (this.isSolved) result.solved = true;
+    this.undoStack.push(snapshot);
+  }
+
+  private parseMap(ascii: string): EngineState {
+    const rows = ascii.replace(/^\n+|\n+$/g, '').split('\n').map(r => r.replace(/\s+$/, ''));
+    const height = rows.length;
+    const width = rows.reduce((m, r) => Math.max(m, r.length), 0);
+
+    let bram: TilePos = { x: 0, y: 0 };
+    let bramFound = false;
+    const grid: CellType[][] = [];
+    for (let y = 0; y < height; y++) {
+      const row: CellType[] = [];
+      const raw = rows[y];
+      for (let x = 0; x < width; x++) {
+        const ch = raw[x] ?? '#';
+        const mapped = DEFAULT_LEGEND[ch] ?? 'wall';
+        if (mapped === 'start') {
+          bram = { x, y };
+          bramFound = true;
+          row.push('floor');
+        } else {
+          row.push(mapped);
+        }
+      }
+      grid.push(row);
+    }
+
+    if (!bramFound) {
+      // Fallback: drop Bram on the first floor tile if the map forgot a B.
+      outer: for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (grid[y][x] === 'floor') { bram = { x, y }; break outer; }
+        }
+      }
+    }
+
+    return {
+      bram,
+      bramFacing: 'right',
+      stonesCarried: 0,
+      grid
+    };
+  }
+
+  private cloneState(s: EngineState): EngineState {
+    return {
+      bram: { ...s.bram },
+      bramFacing: s.bramFacing,
+      stonesCarried: s.stonesCarried,
+      grid: s.grid.map(row => row.slice())
+    };
+  }
+}

@@ -33,12 +33,12 @@ export class MenuScene extends Phaser.Scene {
     addButton(this, '▶ Begin Story', 104, 402, 416, 58, () => this.startStory());
     addButton(this, 'Replay Vertical Slice', 104, 468, 416, 34, () => this.startSlice());
     addSmallText(this, 'Standalone demos', 104, 510, 17);
-    addButton(this, 'Rattle Run', 104, 534, 130, 38, () => this.scene.start('RattleRunScene'));
-    addButton(this, 'Platform', 244, 534, 130, 38, () => this.scene.start('PlatformScene'));
-    addButton(this, 'Top-Down', 384, 534, 136, 38, () => this.scene.start('TopDownScene'));
-    addButton(this, '◴ Clocktower Marsh: Tell Time', 104, 580, 416, 38, () => this.scene.start('ClockTowerScene'));
-    addSmallText(this, 'Story = prologue + slice. Demos = endless practice.', 104, 626, 14);
-    addButton(this, 'Reset progress', 104, 646, 200, 22, () => {
+    addButton(this, 'Rattle Run', 104, 530, 130, 34, () => this.scene.start('RattleRunScene'));
+    addButton(this, 'Platform', 244, 530, 130, 34, () => this.scene.start('PlatformScene'));
+    addButton(this, 'Top-Down', 384, 530, 136, 34, () => this.scene.start('TopDownScene'));
+    addButton(this, '◴ Clocktower Marsh: Tell Time', 104, 570, 416, 34, () => this.scene.start('ClockTowerScene'));
+    addButton(this, '▦ Puzzle Lab: Grid Repair Room', 104, 608, 416, 34, () => this.scene.start('GridPuzzleLabScene'));
+    addButton(this, 'Reset progress', 104, 650, 200, 22, () => {
       GameProgress.reset();
       this.scene.restart();
     });

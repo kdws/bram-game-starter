@@ -211,6 +211,17 @@ export class Bram extends Phaser.GameObjects.Container {
     }
   }
 
+  /**
+   * Flip the side-view sprite horizontally. `up`/`down` are accepted for
+   * call-site convenience but do not change facing on a side sprite.
+   * Procedural fallback does not flip in v0.1 — it's drawn right-facing.
+   */
+  setFacing(direction: 'left' | 'right' | 'up' | 'down') {
+    if (!this.sprite) return;
+    if (direction === 'left') this.sprite.setFlipX(true);
+    else if (direction === 'right') this.sprite.setFlipX(false);
+  }
+
   redraw() {
     if (this.sprite) {
       this.updateSpriteGlow();
