@@ -43,6 +43,12 @@ export interface EngineState {
 export interface MoveResult {
   moved: boolean;
   bumped: boolean;
+  /**
+   * True when Bram tried to push a block but the cell beyond was not floor.
+   * Implies `bumped: true, moved: false`. The scene uses this to surface
+   * the "Blocks need empty space behind them." teaching hint.
+   */
+  attemptedPush: boolean;
   collectedStone: boolean;
   filledSocket: boolean;
   pushedBlock: boolean;

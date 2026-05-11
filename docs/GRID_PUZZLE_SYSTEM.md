@@ -79,7 +79,7 @@ extend the scene's `drawCell()` to render the new type.
 
 ---
 
-## v0.1 rules
+## v0.2 rules
 
 - Bram moves one tile per keypress (arrow keys or WASD).
 - Walking into a **wall**: bump (no move; facing still updates).
@@ -89,11 +89,18 @@ extend the scene's `drawCell()` to render the new type.
   Consumes one stone, fills the socket, Bram steps onto it. If
   the inventory is empty, bump.
 - Walking onto a **filled socket**: passable (acts like floor).
-- Walking onto a **push block**: if the cell beyond is floor or
-  exit, push the block one tile in the direction of movement and
-  step into the vacated tile. Otherwise bump. Stones, sockets,
-  and walls cannot be the cell beyond.
+- Walking onto a **push block**: if the cell beyond is **floor**,
+  push the block one tile in the direction of movement and step
+  into the vacated tile. Otherwise the move bumps and the engine
+  flags `attemptedPush` so the scene can show the
+  "blocks need empty space" teaching hint. Sockets (empty or
+  filled), stones, exits, walls, and other blocks all bump.
 - Walking onto **exit**: always allowed.
+
+Push-rule change in v0.2: v0.1 allowed pushing a block onto the
+exit, which destroyed the exit cell. v0.2 tightens the rule to
+"floor only," which is also a clearer mental model for kids and
+makes the teaching hint consistent.
 
 Solved condition:
 
@@ -205,7 +212,7 @@ The scene must:
 
 ---
 
-## First playable demo: Broken Bridge
+## First playable demo: Broken Bridge (v0.2)
 
 Map (in `GridPuzzleLabScene.ts`):
 
@@ -214,7 +221,7 @@ Map (in `GridPuzzleLabScene.ts`):
 #B...........#
 #.s.....o....#
 #............#
-#.s.....o....#
+#.s....bo....#
 #............#
 #.s.....o....#
 #............#
@@ -222,16 +229,51 @@ Map (in `GridPuzzleLabScene.ts`):
 ##############
 ```
 
-Counts: 4 stones, 4 sockets, 1 exit. Tutorial difficulty.
+Counts: 4 stones, 4 sockets, **1 push block**, 1 exit. Tutorial
+difficulty.
 
-Player flow:
+The push block sits in row 4 directly to the left of a repair
+socket. Pushing **right** — the obvious next step toward the
+socket — bumps because the cell beyond is the socket itself.
+That's the teaching moment. Pushing up or down both clear the
+path, so the puzzle is forgiving while still rewarding "look
+before pushing."
 
-1. Walk left to pick up the first stone.
-2. Walk right to fill the first socket.
-3. Repeat for the remaining three stone/socket pairs.
-4. Reach the bottom-right exit. Gate is now open.
+### Teaching purpose
 
-Success beat:
+> Push blocks introduce spatial planning and make undo feel
+> useful.
+
+Three layered teaching hints fire from the scene as events
+happen. They replace the bottom-of-title tip line in place:
+
+| Trigger | Tip text |
+|---|---|
+| Scene start | "Collect stones, repair sockets, and push blocks out of the way." |
+| First `attemptedPush` (bumped) | "Blocks need empty space behind them." |
+| First undo after at least one move | "Good — one step back is part of solving." |
+
+Each hint fires once per scene visit; later events of the same
+kind do not re-fire.
+
+### Push block visual
+
+Push blocks are drawn as a mossy grey stone with small moss
+tufts on top and gold push-direction arrows on the left and
+right edges. This makes them clearly distinct from the
+warm-brown bark walls. (See `drawCell()` in
+`GridPuzzleLabScene.ts`.)
+
+### Player flow
+
+1. Pick up the row-2 stone, fill the row-2 socket.
+2. Pick up the row-4 stone, walk toward the row-4 socket and
+   meet the push block. Try pushing right — bump. (Tip fires.)
+3. Push up or down to clear the path, then fill the socket.
+4. Pick up the row-6 stone, fill its socket. Same for row 8.
+5. Reach the bottom-right exit. Gate is now open.
+
+### Success beat
 
 > Title: **The bridge holds.**
 > Nilo: *"It stayed."*
@@ -248,7 +290,7 @@ Each of these can be added one at a time in its own demo room:
 
 | Mechanic | New cell types / rules |
 |---|---|
-| Push blocks | `push_block` (already in engine, untested by maps) |
+| Push blocks | `push_block` — **implemented in v0.2, used in Broken Bridge demo** |
 | Sliding tiles / ice | `slide_n/s/e/w` — Bram continues until blocked |
 | Force floors / conveyors | `force_n/s/e/w` — moves Bram on engine "tick" |
 | Toggle switches | `switch_off/on`, `gate_closed/open` + linkage |

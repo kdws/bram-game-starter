@@ -19,8 +19,11 @@ import {
  *  - Walking onto an empty socket: if carrying ≥ 1 stone, fill it (cell
  *    becomes socket_filled, inventory -1) and step onto it. Otherwise bump.
  *  - Walking onto a filled socket: passable (acts like floor).
- *  - Walking onto a push block: if the cell beyond is floor or exit, push
- *    the block into it and step into the vacated cell. Otherwise bump.
+ *  - Walking onto a push block: if the cell beyond is *floor*, push
+ *    the block into it and step into the vacated cell. Otherwise the
+ *    move bumps and `attemptedPush` is set so the scene can surface the
+ *    "blocks need empty space" teaching hint. Pushing onto sockets,
+ *    stones, exits, other blocks, or walls all bump.
  *  - Walking onto exit: always allowed. "Solved" only fires when all
  *    sockets are filled AND Bram is standing on exit.
  *
@@ -127,6 +130,7 @@ export class GridPuzzleEngine {
     const result: MoveResult = {
       moved: false,
       bumped: false,
+      attemptedPush: false,
       collectedStone: false,
       filledSocket: false,
       pushedBlock: false,
@@ -162,8 +166,11 @@ export class GridPuzzleEngine {
       const bx = nx + dx;
       const by = ny + dy;
       const beyond = this.getCell(bx, by);
-      if (beyond !== 'floor' && beyond !== 'exit') {
+      // Only floor is a valid push target. Sockets, exits, stones, walls,
+      // and other blocks all bump and flag attemptedPush.
+      if (beyond !== 'floor') {
         result.bumped = true;
+        result.attemptedPush = true;
         if (mutated) this.undoStack.push(snapshot);
         return result;
       }

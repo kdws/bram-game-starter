@@ -3,22 +3,31 @@ import { Palette } from '../game/palette';
 import { Bram } from '../game/Bram';
 import { GridPuzzleEngine } from '../game/grid/GridPuzzleEngine';
 import { CellType, Direction } from '../game/grid/GridTypes';
-import { addPanel, addSmallText, addTitle } from '../game/ui';
+import { addPanel, addTitle } from '../game/ui';
 
 const TILE = 48;
 
+// v0.2 Broken Bridge layout: one push block in row 4 sits directly to
+// the left of a repair socket. Pushing right (the obvious direction)
+// bumps because the cell beyond is the socket — that's the
+// "blocks need empty space" teaching moment. Pushing up or down clears
+// the path. Single block, multiple solutions, beginner-readable.
 const BROKEN_BRIDGE_MAP = `
 ##############
 #B...........#
 #.s.....o....#
 #............#
-#.s.....o....#
+#.s....bo....#
 #............#
 #.s.....o....#
 #............#
 #.s.....o...E#
 ##############
 `;
+
+const TIP_WELCOME = 'Collect stones, repair sockets, and push blocks out of the way.';
+const TIP_INVALID_PUSH = 'Blocks need empty space behind them.';
+const TIP_FIRST_UNDO = 'Good — one step back is part of solving.';
 
 interface ButtonHandle {
   destroy(): void;
@@ -34,6 +43,10 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   private hudProgress!: Phaser.GameObjects.Text;
   private busy = false;
   private successOpen = false;
+  private tipText!: Phaser.GameObjects.Text;
+  private hasShownInvalidPushHint = false;
+  private hasShownUndoHint = false;
+  private moveCount = 0;
 
   constructor() { super('GridPuzzleLabScene'); }
 
@@ -48,11 +61,13 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.gridOriginY = 132;
 
     addTitle(this, 'Puzzle Lab: Broken Bridge', 40, 24, 28);
-    addSmallText(
-      this,
-      'Carry repair stones onto empty sockets. Reach the gate when all four sockets are repaired.',
-      40, 62, 16
-    );
+    this.tipText = this.add.text(40, 62, TIP_WELCOME, {
+      fontFamily: 'Georgia, serif',
+      fontSize: '16px',
+      color: '#f0dcae',
+      wordWrap: { width: 1200 },
+      shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
+    });
 
     addPanel(this, 28, 626, 1224, 70, 0.86);
     this.hudInventory = this.add.text(60, 638, '', {
@@ -107,8 +122,14 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
     if (!result.moved) {
       if (result.bumped) this.playBump(dir);
+      if (result.attemptedPush && !this.hasShownInvalidPushHint) {
+        this.hasShownInvalidPushHint = true;
+        this.setTip(TIP_INVALID_PUSH);
+      }
       return;
     }
+
+    this.moveCount += 1;
 
     this.busy = true;
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
@@ -138,11 +159,32 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.bram.setFacing(this.engine.bramFacing);
     this.renderGrid();
     this.refreshHUD();
+
+    // Fire the "step back is part of solving" hint the first time the
+    // player undoes a real move (not before they've moved at all).
+    if (this.moveCount > 0 && !this.hasShownUndoHint) {
+      this.hasShownUndoHint = true;
+      this.setTip(TIP_FIRST_UNDO);
+    }
+  }
+
+  private setTip(text: string) {
+    if (!this.tipText) return;
+    this.tipText.setText(text);
+    this.tipText.setAlpha(0);
+    this.tweens.killTweensOf(this.tipText);
+    this.tweens.add({
+      targets: this.tipText,
+      alpha: 1,
+      duration: 240,
+      ease: 'Quad.easeOut'
+    });
   }
 
   private attemptReset() {
     if (this.successOpen) return;
     this.engine.reset();
+    this.moveCount = 0;
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
     this.bram.setPosition(target.x, target.y);
     this.bram.setFacing(this.engine.bramFacing);
@@ -234,12 +276,25 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       g.fillStyle(0xfff5d8, 0.9);
       g.fillCircle(cx - 3, cy - 3, 3);
     } else if (cell === 'push_block') {
-      g.fillStyle(Palette.bark, 1);
-      g.fillRoundedRect(px + 4, py + 4, TILE - 8, TILE - 8, 4);
-      g.lineStyle(2, Palette.parchmentDark, 1);
-      g.strokeRoundedRect(px + 4, py + 4, TILE - 8, TILE - 8, 4);
-      g.lineStyle(2, 0x8a6a3a, 1);
-      g.lineBetween(px + 6, cy, px + TILE - 6, cy);
+      // mossy grey stone block — distinct from warm-brown walls
+      g.fillStyle(0x4a4a3a, 1);
+      g.fillRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 6);
+      g.lineStyle(2, 0x1a1a14, 1);
+      g.strokeRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 6);
+      // top highlight (catches light)
+      g.fillStyle(0x6a6a58, 0.7);
+      g.fillRoundedRect(px + 7, py + 9, TILE - 18, 5, 3);
+      // moss tufts on top
+      g.fillStyle(Palette.moss, 1);
+      g.fillEllipse(cx - 7, py + 12, 10, 4);
+      g.fillStyle(Palette.leaf, 0.85);
+      g.fillCircle(cx - 9, py + 11, 1.8);
+      g.fillStyle(Palette.moss, 0.85);
+      g.fillEllipse(cx + 8, py + 13, 7, 3);
+      // push-direction hints on left/right edges
+      g.fillStyle(Palette.gold, 0.65);
+      g.fillTriangle(px + 8, cy - 3, px + 8, cy + 3, px + 13, cy);
+      g.fillTriangle(px + TILE - 8, cy - 3, px + TILE - 8, cy + 3, px + TILE - 13, cy);
     } else if (cell === 'exit') {
       const open = this.engine.allSocketsRepaired();
       if (open) {
