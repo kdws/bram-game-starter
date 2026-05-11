@@ -17,7 +17,7 @@ export class IntroScene extends Phaser.Scene {
     this.drawNightForest();
 
     addTitle(this, 'A cold morning in Rattlewood', 64, 36, 32);
-    addSmallText(this, 'A Life Spark drifts above the path. Someone is talking to you.', 64, 78, 20);
+    addSmallText(this, 'The Almost World stirs. Bram’s board waits at the trailhead.', 64, 78, 20);
 
     new RestorationProgressStrip(this, 64, 150, { cell: 48, gap: 14, showLabels: false });
 
@@ -36,9 +36,8 @@ export class IntroScene extends Phaser.Scene {
     this.dialogue = new DialogueBox(this, 80, 540, 1120, 140);
 
     const lines: DialogueLine[] = [
-      { speaker: 'Owl', text: 'Easy there, little rattler. You’re not gone. You’re just… misplaced.' },
-      { speaker: 'Bram', text: 'My hands are bones. My everything is bones.' },
       { speaker: 'Owl', text: 'Then we start with hands. Find enough Life Sparks, and the world will remember you.' },
+      { speaker: 'Bram', text: 'Hands first. Got it.' },
       { speaker: 'Owl', text: 'Your board knows the downhill path. Solve what it asks, and it will carry you safely.' }
     ];
 

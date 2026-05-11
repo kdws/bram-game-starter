@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
+import { PrologueScene } from './scenes/PrologueScene';
 import { IntroScene } from './scenes/IntroScene';
 import { RattleRunScene } from './scenes/RattleRunScene';
 import { PlatformScene } from './scenes/PlatformScene';
@@ -31,6 +32,7 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [
     BootScene,
     MenuScene,
+    PrologueScene,
     IntroScene,
     RattleRunScene,
     PlatformScene,

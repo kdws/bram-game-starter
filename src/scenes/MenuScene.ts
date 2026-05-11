@@ -28,21 +28,22 @@ export class MenuScene extends Phaser.Scene {
     });
     new RestorationProgressStrip(this, 360, 290, { cell: 52, gap: 16, showLabels: true });
 
-    addPanel(this, 72, 360, 480, 296, 0.84);
-    addSmallText(this, 'Play', 104, 372, 24);
-    addButton(this, '▶ Play Vertical Slice', 104, 410, 416, 56, () => this.startSlice());
-    addSmallText(this, 'Standalone demo modes', 104, 478, 20);
-    addButton(this, 'Rattle Run', 104, 506, 130, 40, () => this.scene.start('RattleRunScene'));
-    addButton(this, 'Platform', 244, 506, 130, 40, () => this.scene.start('PlatformScene'));
-    addButton(this, 'Top-Down', 384, 506, 136, 40, () => this.scene.start('TopDownScene'));
-    addButton(this, '◴ Clocktower Marsh: Tell Time', 104, 554, 416, 44, () => this.scene.start('ClockTowerScene'));
-    addSmallText(this, 'Slice = guided story. Demos = endless practice.', 104, 606, 15);
-    addButton(this, 'Reset progress', 104, 626, 200, 22, () => {
+    addPanel(this, 72, 360, 480, 320, 0.84);
+    addSmallText(this, 'Play', 104, 372, 22);
+    addButton(this, '▶ Begin Story', 104, 402, 416, 58, () => this.startStory());
+    addButton(this, 'Replay Vertical Slice', 104, 468, 416, 34, () => this.startSlice());
+    addSmallText(this, 'Standalone demos', 104, 510, 17);
+    addButton(this, 'Rattle Run', 104, 534, 130, 38, () => this.scene.start('RattleRunScene'));
+    addButton(this, 'Platform', 244, 534, 130, 38, () => this.scene.start('PlatformScene'));
+    addButton(this, 'Top-Down', 384, 534, 136, 38, () => this.scene.start('TopDownScene'));
+    addButton(this, '◴ Clocktower Marsh: Tell Time', 104, 580, 416, 38, () => this.scene.start('ClockTowerScene'));
+    addSmallText(this, 'Story = prologue + slice. Demos = endless practice.', 104, 626, 14);
+    addButton(this, 'Reset progress', 104, 646, 200, 22, () => {
       GameProgress.reset();
       this.scene.restart();
     });
 
-    addPanel(this, 620, 360, 596, 296, 0.78);
+    addPanel(this, 620, 360, 596, 320, 0.78);
     addSmallText(this, 'Chapter spine', 652, 372, 26);
     chapters.forEach((chapter, index) => {
       const y = 408 + index * 76;
@@ -54,7 +55,15 @@ export class MenuScene extends Phaser.Scene {
       });
     });
 
-    addSmallText(this, 'Keyboard: arrows/WASD to move, space to jump/select. Touch/mouse buttons work in menus.', 78, 670, 18);
+    addSmallText(this, 'Keyboard: arrows/WASD to move, space to jump/select. Touch/mouse buttons work in menus.', 78, 692, 16);
+  }
+
+  private startStory() {
+    GameProgress.reset();
+    this.cameras.main.fadeOut(400, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('PrologueScene');
+    });
   }
 
   private startSlice() {
