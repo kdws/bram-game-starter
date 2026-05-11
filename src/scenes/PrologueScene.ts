@@ -29,6 +29,15 @@ export class PrologueScene extends Phaser.Scene {
   private hintLabel!: Phaser.GameObjects.Text;
   private panels: PanelFn[] = [];
 
+  // Panel 14 interactive repair state
+  private repairActive = false;
+  private repairComplete = false;
+  private repairTilesLeft = 0;
+  private repairTargets: Array<{ x: number; y: number; label: string }> = [];
+  private repairHintLabel?: Phaser.GameObjects.Text;
+  private repairDragHandler?: (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject, dragX: number, dragY: number) => void;
+  private repairDragEndHandler?: (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject) => void;
+
   constructor() { super('PrologueScene'); }
 
   create() {
@@ -77,6 +86,7 @@ export class PrologueScene extends Phaser.Scene {
 
   private advance() {
     if (this.advancing) return;
+    if (this.repairActive && !this.repairComplete) return;
     if (this.panelIndex >= this.panels.length - 1) {
       this.finish();
       return;
@@ -110,6 +120,7 @@ export class PrologueScene extends Phaser.Scene {
   }
 
   private renderPanel(index: number) {
+    this.teardownRepair();
     this.panelContainer?.destroy();
     const c = this.add.container(0, 0);
     this.panelContainer = c;
@@ -118,6 +129,22 @@ export class PrologueScene extends Phaser.Scene {
     this.drawPageMarker(c, index);
     c.setAlpha(0);
     this.tweens.add({ targets: c, alpha: 1, duration: 380, ease: 'Quad.easeOut' });
+  }
+
+  private teardownRepair() {
+    if (this.repairDragHandler) {
+      this.input.off('drag', this.repairDragHandler);
+      this.repairDragHandler = undefined;
+    }
+    if (this.repairDragEndHandler) {
+      this.input.off('dragend', this.repairDragEndHandler);
+      this.repairDragEndHandler = undefined;
+    }
+    this.repairActive = false;
+    this.repairComplete = false;
+    this.repairTilesLeft = 0;
+    this.repairTargets = [];
+    this.repairHintLabel = undefined;
   }
 
   private drawPageMarker(c: Phaser.GameObjects.Container, index: number) {
@@ -894,59 +921,278 @@ export class PrologueScene extends Phaser.Scene {
 
   private panelFirstRepair(c: Phaser.GameObjects.Container) {
     this.drawKitchenBackdrop(c, { mist: 0.12 });
-    // big clock face on the counter
     const cx = 640;
     const cy = 280;
+
+    // empty clock face (no numbers, no hands yet)
     const face = this.add.graphics();
-    face.fillStyle(Palette.parchment, 0.96).fillCircle(cx, cy, 90);
-    face.lineStyle(5, Palette.parchmentDark, 1).strokeCircle(cx, cy, 90);
-    face.lineStyle(3, Palette.gold, 0.65).strokeCircle(cx, cy, 80);
-    c.add(face);
-    // numbers 12, 3, 6, 9 placed back
-    const placements: Array<[number, number, string]> = [
-      [cx, cy - 60, '12'],
-      [cx + 60, cy, '3'],
-      [cx, cy + 60, '6'],
-      [cx - 60, cy, '9']
+    face.fillStyle(Palette.parchment, 0.96).fillCircle(cx, cy, 92);
+    face.lineStyle(5, Palette.parchmentDark, 1).strokeCircle(cx, cy, 92);
+    face.lineStyle(3, Palette.gold, 0.65).strokeCircle(cx, cy, 82);
+    // anchor notches as drop hints
+    const anchors = [
+      { x: cx, y: cy - 60 },
+      { x: cx + 60, y: cy },
+      { x: cx, y: cy + 60 },
+      { x: cx - 60, y: cy }
     ];
-    placements.forEach(([px, py, label], i) => {
-      const t = this.add.text(px, py, label, {
-        fontFamily: 'Georgia, serif',
-        fontSize: '24px',
-        color: '#3b2b16',
-        fontStyle: 'bold'
-      }).setOrigin(0.5);
-      t.setAlpha(0);
-      this.tweens.add({ targets: t, alpha: 1, duration: 320, delay: 120 + i * 90, ease: 'Quad.easeOut' });
-      c.add(t);
+    anchors.forEach(a => {
+      face.fillStyle(Palette.parchmentDark, 0.35).fillCircle(a.x, a.y, 22);
+      face.lineStyle(2, Palette.parchmentDark, 0.55).strokeCircle(a.x, a.y, 22);
     });
-    // hands ticking
+    // tiny minute ticks around the rim
+    for (let i = 0; i < 12; i++) {
+      const a = (i * 30 - 90) * Math.PI / 180;
+      const x1 = cx + Math.cos(a) * 76;
+      const y1 = cy + Math.sin(a) * 76;
+      const x2 = cx + Math.cos(a) * 82;
+      const y2 = cy + Math.sin(a) * 82;
+      face.lineStyle(2, Palette.boneShadow, 0.7).lineBetween(x1, y1, x2, y2);
+    }
+    // ghost center boss
+    face.fillStyle(Palette.gold, 0.45).fillCircle(cx, cy, 5);
+    c.add(face);
+
+    // Nilo on the right (always visible during repair)
+    const nilo = drawAlienNilo(this, 980, 320, 0.95);
+    c.add(nilo);
+
+    // prompt + hint slot above the clock
+    const prompt = this.add.text(cx, 140, 'Place 12, 3, 6, and 9 to anchor the clock.', {
+      fontFamily: 'Georgia, serif',
+      fontStyle: 'italic',
+      fontSize: '20px',
+      color: '#ffe9ad'
+    }).setOrigin(0.5);
+    c.add(prompt);
+    this.repairHintLabel = this.add.text(cx, 172, '', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '17px',
+      color: '#ffdf7a'
+    }).setOrigin(0.5);
+    c.add(this.repairHintLabel);
+
+    this.startRepair(c);
+  }
+
+  // ---------- interactive repair ----------
+
+  private startRepair(panel: Phaser.GameObjects.Container) {
+    const cx = 640;
+    const cy = 280;
+    this.repairActive = true;
+    this.repairComplete = false;
+    this.repairTargets = [
+      { x: cx,      y: cy - 60, label: '12' },
+      { x: cx + 60, y: cy,      label: '3'  },
+      { x: cx,      y: cy + 60, label: '6'  },
+      { x: cx - 60, y: cy,      label: '9'  }
+    ];
+    this.repairTilesLeft = this.repairTargets.length;
+
+    const startPositions = Phaser.Utils.Array.Shuffle([
+      { x: 220, y: 440 },
+      { x: 320, y: 440 },
+      { x: 420, y: 440 },
+      { x: 520, y: 440 }
+    ]) as Array<{ x: number; y: number }>;
+
+    this.repairTargets.forEach((target, i) => {
+      const tile = this.makeRepairTile(target.label, startPositions[i].x, startPositions[i].y, i);
+      panel.add(tile);
+    });
+
+    this.repairDragHandler = (_pointer, gameObject, dragX, dragY) => {
+      const obj = gameObject as Phaser.GameObjects.Container;
+      if (!obj.getData || obj.getData('placed')) return;
+      obj.x = dragX;
+      obj.y = dragY;
+    };
+    this.repairDragEndHandler = (_pointer, gameObject) => {
+      const obj = gameObject as Phaser.GameObjects.Container;
+      if (!obj.getData || obj.getData('placed')) return;
+      this.evaluateTilePlacement(obj, panel);
+    };
+    this.input.on('drag', this.repairDragHandler);
+    this.input.on('dragend', this.repairDragEndHandler);
+  }
+
+  private makeRepairTile(label: string, x: number, y: number, targetIndex: number): Phaser.GameObjects.Container {
+    const tile = this.add.container(x, y);
+    const bg = this.add.graphics();
+    bg.fillStyle(Palette.parchment, 1).fillCircle(0, 0, 30);
+    bg.lineStyle(4, Palette.parchmentDark, 1).strokeCircle(0, 0, 30);
+    bg.lineStyle(2, Palette.gold, 0.75).strokeCircle(0, 0, 24);
+    const t = this.add.text(0, 0, label, {
+      fontFamily: 'Georgia, serif',
+      fontSize: '26px',
+      color: '#3b2b16',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    tile.add([bg, t]);
+    tile.setSize(64, 64);
+    tile.setInteractive(new Phaser.Geom.Circle(0, 0, 34), Phaser.Geom.Circle.Contains);
+    this.input.setDraggable(tile);
+    tile.setData('startX', x);
+    tile.setData('startY', y);
+    tile.setData('targetIndex', targetIndex);
+    tile.setData('placed', false);
+    this.tweens.add({ targets: tile, scale: 1.06, yoyo: true, repeat: -1, duration: 700, ease: 'Sine.easeInOut' });
+    return tile;
+  }
+
+  private evaluateTilePlacement(tile: Phaser.GameObjects.Container, panel: Phaser.GameObjects.Container) {
+    const targetIndex = tile.getData('targetIndex') as number;
+    const target = this.repairTargets[targetIndex];
+    const dx = tile.x - target.x;
+    const dy = tile.y - target.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const THRESHOLD = 70; // generous hit zone for kids
+    if (dist <= THRESHOLD) {
+      this.tweens.killTweensOf(tile);
+      tile.setData('placed', true);
+      tile.disableInteractive();
+      tile.setScale(1);
+      this.tweens.add({
+        targets: tile,
+        x: target.x,
+        y: target.y,
+        duration: 220,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.spawnTickEffect(target.x, target.y, panel);
+          this.repairTilesLeft -= 1;
+          if (this.repairTilesLeft <= 0) this.onRepairComplete(panel);
+        }
+      });
+    } else {
+      this.tweens.add({
+        targets: tile,
+        x: tile.getData('startX') as number,
+        y: tile.getData('startY') as number,
+        duration: 320,
+        ease: 'Quad.easeInOut'
+      });
+      this.showRepairHint('Clocks keep 12 at the top.');
+    }
+  }
+
+  private spawnTickEffect(x: number, y: number, panel: Phaser.GameObjects.Container) {
+    const tick = this.add.text(x + 28, y - 26, 'tick', {
+      fontFamily: 'Georgia, serif',
+      fontStyle: 'italic',
+      fontSize: '16px',
+      color: '#ffdf7a'
+    });
+    panel.add(tick);
+    this.tweens.add({
+      targets: tick,
+      y: tick.y - 28,
+      alpha: 0,
+      duration: 700,
+      ease: 'Quad.easeOut',
+      onComplete: () => tick.destroy()
+    });
+    for (let i = 0; i < 6; i++) {
+      const s = this.add.text(x, y, '✦', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '14px',
+        color: '#ffdf7a'
+      }).setOrigin(0.5);
+      panel.add(s);
+      const angle = (i / 6) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.3, 0.3);
+      this.tweens.add({
+        targets: s,
+        x: x + Math.cos(angle) * 34,
+        y: y + Math.sin(angle) * 34,
+        alpha: 0,
+        duration: 540,
+        ease: 'Quad.easeOut',
+        onComplete: () => s.destroy()
+      });
+    }
+  }
+
+  private showRepairHint(text: string) {
+    if (!this.repairHintLabel) return;
+    this.tweens.killTweensOf(this.repairHintLabel);
+    this.repairHintLabel.setText(text).setAlpha(1);
+    this.tweens.add({
+      targets: this.repairHintLabel,
+      alpha: 0,
+      delay: 1800,
+      duration: 500,
+      onComplete: () => this.repairHintLabel?.setText('')
+    });
+  }
+
+  private onRepairComplete(panel: Phaser.GameObjects.Container) {
+    const cx = 640;
+    const cy = 280;
+
+    // hide the prompt/hint slot
+    if (this.repairHintLabel) this.repairHintLabel.setText('');
+
+    // warm halo behind the clock
+    const glow = this.add.graphics();
+    glow.fillStyle(Palette.glow, 0.22).fillCircle(cx, cy, 140);
+    glow.fillStyle(Palette.glow, 0.12).fillCircle(cx, cy, 200);
+    glow.setAlpha(0);
+    panel.add(glow);
+    panel.sendToBack(glow);
+    this.tweens.add({ targets: glow, alpha: 1, duration: 320 });
+    this.tweens.add({ targets: glow, alpha: 0.7, yoyo: true, repeat: -1, duration: 950, delay: 320, ease: 'Sine.easeInOut' });
+
+    // clock hands fade in (a ticking arrangement)
     const hands = this.add.graphics();
     hands.lineStyle(4, Palette.bark, 1).lineBetween(cx, cy, cx, cy - 38);
     hands.lineStyle(3, Palette.ink, 1).lineBetween(cx, cy, cx + 34, cy + 10);
     hands.fillStyle(Palette.gold, 1).fillCircle(cx, cy, 6);
-    c.add(hands);
+    hands.setAlpha(0);
+    panel.add(hands);
+    this.tweens.add({ targets: hands, alpha: 1, duration: 360 });
 
-    // Bram's hand reaching from left, with a spark line to the clock
+    // Bram's hand reaches in
     const handG = this.add.graphics();
     handG.fillStyle(0xf2d2a8, 1).fillEllipse(420, 320, 60, 24);
     handG.fillStyle(0xf2d2a8, 1).fillRoundedRect(360, 314, 70, 14, 6);
-    c.add(handG);
-    const spark = this.add.graphics();
-    spark.lineStyle(2, 0xeaf6ff, 0.95);
-    spark.lineBetween(460, 314, 510, 290);
-    spark.lineBetween(510, 290, 540, 270);
-    spark.fillStyle(0xeaf6ff, 1).fillCircle(540, 270, 4);
-    spark.fillStyle(0xc8e6ff, 0.6).fillCircle(540, 270, 10);
-    c.add(spark);
-    this.tweens.add({ targets: spark, alpha: 0.4, yoyo: true, repeat: -1, duration: 320 });
+    handG.setAlpha(0);
+    panel.add(handG);
+    this.tweens.add({ targets: handG, alpha: 1, duration: 320 });
 
-    // Nilo on right, gentler tendrils
-    const nilo = drawAlienNilo(this, 980, 320, 0.95);
-    c.add(nilo);
+    // animated spark from hand to clock center
+    this.time.delayedCall(360, () => {
+      const spark = this.add.graphics();
+      spark.lineStyle(2, 0xeaf6ff, 0.95);
+      spark.beginPath();
+      spark.moveTo(460, 314);
+      spark.lineTo(510, 290);
+      spark.lineTo(540, 270);
+      spark.lineTo(580, 260);
+      spark.lineTo(cx, cy);
+      spark.strokePath();
+      spark.fillStyle(0xeaf6ff, 1).fillCircle(cx, cy, 6);
+      spark.fillStyle(0xc8e6ff, 0.6).fillCircle(cx, cy, 14);
+      spark.setAlpha(0);
+      panel.add(spark);
+      this.tweens.add({ targets: spark, alpha: 1, duration: 220 });
+      this.tweens.add({ targets: spark, alpha: 0.4, yoyo: true, repeat: -1, duration: 360, delay: 220 });
+    });
 
-    this.addSpeechBubble(c, 280, 160, 'Bram', 'Just enough.', { width: 220, height: 70, tail: 'down-right' });
-    this.addSpeechBubble(c, 990, 150, 'Nilo', 'What’s next?', { width: 240, height: 70, tail: 'down' });
+    // dialogue + continue hint after a beat
+    this.time.delayedCall(950, () => {
+      this.addSpeechBubble(panel, 280, 160, 'Bram', 'Just enough.', { width: 220, height: 70, tail: 'down-right' });
+      this.addSpeechBubble(panel, 990, 150, 'Nilo', 'What’s next?', { width: 240, height: 70, tail: 'down' });
+      const cont = this.add.text(cx, 478, 'Click or press space to continue', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '15px',
+        color: '#ffdf7a',
+        fontStyle: 'italic'
+      }).setOrigin(0.5);
+      panel.add(cont);
+      this.tweens.add({ targets: cont, alpha: 0.5, yoyo: true, repeat: -1, duration: 700 });
+      this.repairComplete = true;
+    });
   }
 
   private panelTheWorldCalls(c: Phaser.GameObjects.Container) {
