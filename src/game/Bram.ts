@@ -3,12 +3,13 @@ import { Palette } from './palette';
 import {
   BRAM_SKELETON_ATLAS,
   BRAM_SKELETON_META,
+  BRAM_SKELETON_IDLE_FRAME,
   bramSkeletonReady
 } from './sprites/bramSkeletonAtlas';
 
-// The procedural Bram was drawn at ~80px tall at scale 1.0. The atlas sprite
-// is 192×192 with ~120px of visible character. Multiplying by this base scale
-// keeps existing scene layouts (which were tuned against the procedural size)
+// The procedural Bram was drawn at ~80px tall at scale 1.0. The v0.2 atlas
+// sprite is 192×192 with ~120-150px of visible character. Multiplying by this
+// base scale keeps existing scene layouts (tuned against the procedural size)
 // roughly correct without touching every call site.
 const SPRITE_BASE_SCALE = 0.7;
 
@@ -16,6 +17,9 @@ const SPRITE_BASE_SCALE = 0.7;
 // sprite's bottom-center pivot here so the new art stands on the same line
 // the procedural drawing stood on.
 const FEET_OFFSET_Y = 38;
+
+// Dev-only: toggle this with H to see frame bounds, hitbox, and feet pivot.
+const DEV_BUILD = import.meta.env.DEV;
 
 interface BramOptions {
   skateboard?: boolean;
@@ -36,6 +40,11 @@ export class Bram extends Phaser.GameObjects.Container {
   private hasSkateboard: boolean;
   private busyAnim = false;
 
+  // Dev-only debug overlay (toggled with H)
+  private debugGraphic?: Phaser.GameObjects.Graphics;
+  private debugVisible = false;
+  private debugHandler?: () => void;
+
   constructor(scene: Phaser.Scene, x: number, y: number, options: BramOptions = {}) {
     super(scene, x, y);
     scene.add.existing(this);
@@ -49,6 +58,71 @@ export class Bram extends Phaser.GameObjects.Container {
     }
 
     this.setScale(options.scale ?? 1);
+
+    if (DEV_BUILD) this.bindDevDebugKey();
+  }
+
+  // ---------- dev debug overlay ----------
+
+  private bindDevDebugKey() {
+    const kb = this.scene.input.keyboard;
+    if (!kb) return;
+    this.debugHandler = () => this.toggleDebugOverlay();
+    kb.on('keydown-H', this.debugHandler);
+    const cleanup = () => {
+      if (this.debugHandler) kb.off('keydown-H', this.debugHandler);
+      this.debugHandler = undefined;
+    };
+    this.scene.events.once('shutdown', cleanup);
+    this.scene.events.once('destroy', cleanup);
+  }
+
+  private toggleDebugOverlay() {
+    this.debugVisible = !this.debugVisible;
+    this.updateDebugOverlay();
+  }
+
+  private updateDebugOverlay() {
+    if (!this.debugGraphic) {
+      this.debugGraphic = this.scene.add.graphics();
+      this.add(this.debugGraphic);
+    }
+    const g = this.debugGraphic;
+    g.clear();
+    if (!this.debugVisible) return;
+
+    const s = this.sprite ? SPRITE_BASE_SCALE : 1;
+    const meta = BRAM_SKELETON_META;
+
+    if (this.sprite) {
+      // 192x192 sprite frame bounds (pre-container-scale, in local space)
+      const frameW = meta.frameWidth * s;
+      const frameH = meta.frameHeight * s;
+      const frameLeft = -(meta.origin.x * frameW);
+      const frameTop  = -(meta.origin.y * frameH) + FEET_OFFSET_Y;
+      g.lineStyle(1, 0xff66ff, 0.6);
+      g.strokeRect(frameLeft, frameTop, frameW, frameH);
+
+      // suggested hitbox at native coords, scaled
+      const hb = meta.hitbox;
+      g.lineStyle(2, 0x00ff66, 0.95);
+      g.strokeRect(
+        frameLeft + hb.x * s,
+        frameTop  + hb.y * s,
+        hb.w * s,
+        hb.h * s
+      );
+    }
+
+    // feet pivot crosshair (container-local)
+    g.lineStyle(2, 0xffff66, 1);
+    g.lineBetween(-12, FEET_OFFSET_Y, 12, FEET_OFFSET_Y);
+    g.lineBetween(0, FEET_OFFSET_Y - 12, 0, FEET_OFFSET_Y + 12);
+
+    // container origin marker
+    g.lineStyle(1, 0xff3366, 0.85);
+    g.lineBetween(-6, 0, 6, 0);
+    g.lineBetween(0, -6, 0, 6);
   }
 
   // ---------- sprite mode ----------
@@ -58,7 +132,7 @@ export class Bram extends Phaser.GameObjects.Container {
     this.add(glow);
     this.spriteGlow = glow;
 
-    const sprite = this.scene.add.sprite(0, FEET_OFFSET_Y, BRAM_SKELETON_ATLAS, 'idle_0001');
+    const sprite = this.scene.add.sprite(0, FEET_OFFSET_Y, BRAM_SKELETON_ATLAS, BRAM_SKELETON_IDLE_FRAME);
     sprite.setOrigin(BRAM_SKELETON_META.origin.x, BRAM_SKELETON_META.origin.y);
     sprite.setScale(SPRITE_BASE_SCALE);
     sprite.play(this.idleKey);

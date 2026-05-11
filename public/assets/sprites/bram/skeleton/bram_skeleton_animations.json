@@ -1,142 +1,141 @@
 {
   "atlasKey": "BRAM_SKELETON_ATLAS",
-  "texture": "bram_skeleton_atlas.png",
-  "atlas": "bram_skeleton_atlas.json",
-  "frameWidth": 192,
-  "frameHeight": 192,
-  "origin": {
-    "x": 0.5,
-    "y": 0.875
-  },
-  "recommendedScale": 1,
-  "hitbox": {
-    "x": 72,
-    "y": 34,
-    "w": 56,
-    "h": 132
-  },
   "animations": {
     "bram_skeleton_idle": {
       "frames": [
-        "idle_0001",
-        "idle_0002",
-        "idle_0003",
-        "idle_0004"
+        "idle_0001.png",
+        "idle_0002.png",
+        "idle_0003.png",
+        "idle_0004.png"
       ],
-      "frameRate": 5,
+      "frameRate": 4,
       "repeat": -1
+    },
+    "bram_skeleton_curious": {
+      "frames": [
+        "curious_0001.png"
+      ],
+      "frameRate": 1,
+      "repeat": 0
     },
     "bram_skeleton_walk": {
       "frames": [
-        "walk_0001",
-        "walk_0002",
-        "walk_0003",
-        "walk_0004",
-        "walk_0005",
-        "walk_0006"
+        "walk_0001.png",
+        "walk_0002.png",
+        "walk_0003.png",
+        "walk_0004.png",
+        "walk_0005.png",
+        "walk_0006.png"
       ],
-      "frameRate": 9,
+      "frameRate": 8,
       "repeat": -1
     },
     "bram_skeleton_run": {
       "frames": [
-        "run_0001",
-        "run_0002",
-        "run_0003",
-        "run_0004",
-        "run_0005",
-        "run_0006"
+        "run_0001.png",
+        "run_0002.png",
+        "run_0003.png",
+        "run_0004.png",
+        "run_0005.png",
+        "run_0006.png"
       ],
-      "frameRate": 12,
+      "frameRate": 10,
       "repeat": -1
     },
     "bram_skeleton_jump_takeoff": {
       "frames": [
-        "jump_takeoff_0001"
+        "jump_takeoff_0001.png"
       ],
       "frameRate": 1,
       "repeat": 0
     },
     "bram_skeleton_jump_midair": {
       "frames": [
-        "jump_midair_0001"
+        "jump_midair_0001.png"
       ],
       "frameRate": 1,
       "repeat": 0
     },
     "bram_skeleton_land": {
       "frames": [
-        "land_0001"
+        "land_0001.png"
       ],
       "frameRate": 1,
       "repeat": 0
     },
     "bram_skeleton_crouch": {
       "frames": [
-        "crouch_0001"
+        "crouch_0001.png"
       ],
       "frameRate": 1,
       "repeat": 0
     },
     "bram_skeleton_celebrate": {
       "frames": [
-        "celebrate_0001",
-        "celebrate_0002",
-        "celebrate_0003"
+        "celebrate_0001.png",
+        "celebrate_0002.png",
+        "celebrate_0003.png"
       ],
-      "frameRate": 6,
+      "frameRate": 7,
+      "repeat": 0
+    },
+    "bram_skeleton_worried": {
+      "frames": [
+        "worried_0001.png"
+      ],
+      "frameRate": 1,
       "repeat": 0
     },
     "bram_skeleton_fall_apart": {
       "frames": [
-        "fall_apart_0001",
-        "fall_apart_0002",
-        "fall_apart_0003",
-        "fall_apart_0004",
-        "fall_apart_0005",
-        "fall_apart_0006"
+        "fall_apart_0001.png",
+        "fall_apart_0002.png",
+        "fall_apart_0003.png",
+        "fall_apart_0004.png",
+        "fall_apart_0005.png",
+        "fall_apart_0006.png"
       ],
-      "frameRate": 10,
+      "frameRate": 12,
       "repeat": 0
     },
     "bram_skeleton_reassemble": {
       "frames": [
-        "reassemble_0001",
-        "reassemble_0002",
-        "reassemble_0003",
-        "reassemble_0004",
-        "reassemble_0005",
-        "reassemble_0006"
+        "reassemble_0001.png",
+        "reassemble_0002.png",
+        "reassemble_0003.png",
+        "reassemble_0004.png",
+        "reassemble_0005.png",
+        "reassemble_0006.png"
       ],
-      "frameRate": 10,
+      "frameRate": 12,
       "repeat": 0
     },
     "bram_skeleton_skate_push": {
       "frames": [
-        "skate_push_0001",
-        "skate_push_0002",
-        "skate_push_0003",
-        "skate_push_0004"
+        "skate_push_0001.png",
+        "skate_push_0002.png",
+        "skate_push_0003.png",
+        "skate_push_0004.png"
       ],
       "frameRate": 8,
       "repeat": -1
     },
     "bram_skeleton_skate_ride": {
       "frames": [
-        "skate_ride_0001",
-        "skate_ride_0002"
+        "skate_ride_0001.png",
+        "skate_ride_0002.png"
       ],
       "frameRate": 4,
       "repeat": -1
     },
     "bram_skeleton_skate_ollie": {
       "frames": [
-        "skate_ollie_0001",
-        "skate_ollie_0002",
-        "skate_ollie_0003",
-        "skate_ollie_0004"
+        "skate_ollie_0001.png",
+        "skate_ollie_0002.png",
+        "skate_ollie_0003.png",
+        "skate_ollie_0004.png"
       ],
-      "frameRate": 8,
+      "frameRate": 10,
       "repeat": 0
     }
   }

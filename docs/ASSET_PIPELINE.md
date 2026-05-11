@@ -116,6 +116,29 @@ procedural fallback in case the atlas fails to load). Replace the
 v0.1 art when the painterly pass is ready — names, frame counts,
 pivot, and hitbox must stay identical.
 
+### Naming note
+
+The first generated sprite atlas was an **engineering dummy** and
+is not canonical art. It was discarded.
+
+The currently integrated Bram skeleton atlas is the **first
+canonical runtime sprite pass**. It came from the style-matched
+**Bram Skeleton Side-Scroller v0.2** source pack, but is treated
+in-code as the **v0.1 runtime atlas** — i.e. our first stable
+integration. Future redraws should preserve frame names, frame
+size, pivot/feet alignment, animation keys, and atlas JSON
+structure so they can be dropped in without touching code.
+
+Glossary:
+- **engineering dummy v0.1** — discarded, not visual canon.
+- **runtime Bram skeleton atlas v0.1** — currently in-game,
+  canonical.
+- **style source pack v0.2** — the visual/art pass that produced
+  the integrated atlas.
+
+Per-instance runtime tuning (scale, pivot offset, hitbox, anim
+timing) is tracked separately in `docs/SPRITE_QA.md`.
+
 ### File specs
 
 | Field | Spec |

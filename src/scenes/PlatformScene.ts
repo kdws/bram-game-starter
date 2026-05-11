@@ -44,7 +44,10 @@ export class PlatformScene extends Phaser.Scene {
     this.bram = new Bram(this, 150, 480, { scale: 1.05 });
     this.physics.add.existing(this.bram);
     this.body = this.bram.body as Phaser.Physics.Arcade.Body;
-    this.body.setSize(58, 90).setOffset(-29, -76).setCollideWorldBounds(true);
+    // Body bottom = container y +38 = Bram's feet line (see Bram.FEET_OFFSET_Y).
+    // This keeps the new v0.1-runtime atlas standing on platforms cleanly
+    // instead of sinking 24px into them; procedural fallback feet also sit at +38.
+    this.body.setSize(58, 90).setOffset(-29, -52).setCollideWorldBounds(true);
 
     const platforms = this.physics.add.staticGroup();
     this.makePlatform(platforms, 0, 620, 420, 80);
