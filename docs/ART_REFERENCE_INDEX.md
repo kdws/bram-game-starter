@@ -167,3 +167,31 @@ as additional visual direction.
 **Do not** treat as final runtime sprites either. Same pipeline
 rule — slice/redraw into clean transparent sheets under
 `public/assets/...` when ready.
+
+---
+
+## 08 — Claude Integration Asset Pack (2026-05-11)
+
+**Path:** `assets/artwork/bram_claude_integration_asset_pack/`
+
+**Purpose:** polished concept sheets covering all four GridPuzzleLab
+domains. Delivered as 1448×1086 composite reference sheets — **not
+pre-sliced**. Use as highest-fidelity visual direction for the
+next production sprite-slicing pass.
+
+| File | Use as reference for |
+|---|---|
+| `01_tileset/fantasy_ruins_game_tileset_sheet.png` | Mossy ruins walls, warm floor, water edges, bridge planks, sockets, exits. Best available tileset reference. |
+| `02_props_icons/fantasy_puzzle_icons_and_props.png` | Repair stones, numbered stones, crates, keys, gates, lanterns, levers, bells, signs, portal props. |
+| `03_ui_kit/fantasy_game_ui_kit_design.png` | Parchment UI panels, buttons, hints, objective cards, undo/reset, success banners, portraits. |
+| `04_vfx/magical_vfx_sprite_sheet_layout.png` | Blue repair-energy VFX (Nilo), warm gold victory VFX (Bram/Life Sparks). |
+
+**Canon rules confirmed by this pack:** blue = Nilo repair energy;
+gold = Bram victory warmth / Life Spark success. Cozy storybook
+fantasy, mossy stone walls, warm sandy floors, arched stone exit.
+
+**Do not** commit these sheets or treat them as runtime sprites.
+Slice/redraw each element into a transparent, consistent-scale PNG
+under `public/assets/tilesets/rattlewood_grid/` (or similar) when
+ready for production. The current procedural `drawCell()` in
+`GridPuzzleLabScene.ts` already implements these visual rules.
