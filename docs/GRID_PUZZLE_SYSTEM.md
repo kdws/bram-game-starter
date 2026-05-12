@@ -256,7 +256,40 @@ happen. They replace the bottom-of-title tip line in place:
 Each hint fires once per scene visit; later events of the same
 kind do not re-fire.
 
-### Visual direction (v0.2 procedural pass)
+### Visual direction (v0.3 — sprite integration, 2026-05-12)
+
+Sliced runtime sprites from `bram_sliced_runtime_assets_rebuilt`
+ship under `public/assets/` and are loaded by `loadGridAssets()`
+in `BootScene`. `GridPuzzleLabScene` renders two layers:
+
+- **Static sprite layer** (walls + floors): created once at `create()`
+  time; never torn down.
+- **Dynamic sprite pool** (stones, sockets, push block, exit): destroyed
+  and recreated each `renderDynamicCells()` call after every player move.
+- **Procedural fallback**: if `this.textures.exists(GridAssets.WALL)`
+  returns false, the scene falls back to the original Graphics-based
+  `drawCellProcedural()`.
+
+Key asset mappings:
+
+| Cell type | Asset key | File |
+|---|---|---|
+| Wall | `grid_wall` | `tilesets/rattlewood_grid/tile_01.png` |
+| Floor (even) | `grid_floor` | `tilesets/rattlewood_grid/tile_07.png` |
+| Floor (odd) | `grid_floor_alt` | `tilesets/rattlewood_grid/tile_08.png` |
+| Socket empty | `grid_socket_empty` | `tilesets/rattlewood_grid/socket_unlit.png` |
+| Socket filled | `grid_socket_filled` | `tilesets/rattlewood_grid/socket_lit_c.png` |
+| Repair stone | `grid_repair_stone` | `props/grid/repair_stone_glow.png` |
+| Push block | `grid_push_block` | `props/grid/push_block_stone.png` |
+| Exit closed | `grid_exit_closed` | `tilesets/rattlewood_grid/exit_closed_arch.png` |
+| Exit open | `grid_exit_open` | `tilesets/rattlewood_grid/exit_open_arch.png` |
+
+Keys are defined in `src/game/assets/GridAssetKeys.ts`.
+
+The old v0.2 procedural visual pass (below) remains authoritative
+as fallback documentation:
+
+### Visual direction (v0.2 procedural pass — fallback)
 
 Procedural tile visuals were tuned to match the local concept
 reference packs (see `ASSET_INTEGRATION_MANIFEST.md` and

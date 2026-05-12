@@ -81,10 +81,20 @@ Texture Atlas  →  Phaser Animation Registry  →  Scene Integration
 |---|---|---|
 | Concept collection | Concept Art | `assets/artwork/` (gitignored) |
 | Bram Skeleton v0.1 | **Atlas + Scene Integration** ✅ | `public/assets/sprites/bram/skeleton/` |
+| Grid tiles (rattlewood) | **Scene Integration** ✅ | `public/assets/tilesets/rattlewood_grid/` |
+| Grid props | **Scene Integration** ✅ | `public/assets/props/grid/` |
+| Grid UI kit | **Scene Integration** ✅ | `public/assets/ui/grid/` |
+| Grid VFX | **Scene Integration** ✅ | `public/assets/vfx/grid/` |
 | Bram Human | Concept | reference sheet only |
 | Nilo (alien + human) | Concept | reference sheet only |
 | Owl | Concept | reference sheet only |
-| Tilesets, props, UI | Concept | reference sheet only |
+
+**Grid assets (v0.1 — 2026-05-12):** 141 transparent PNGs loaded by
+`loadGridAssets()` in `BootScene`. Keys defined in
+`src/game/assets/GridAssetKeys.ts`. `GridPuzzleLabScene` renders
+walls/floors as a static sprite layer and dynamic cells (stones,
+sockets, push block, exit) as a per-move sprite pool, with procedural
+fallback if the textures fail to load.
 
 ## Runtime asset path convention
 
