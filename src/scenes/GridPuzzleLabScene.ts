@@ -3,15 +3,25 @@ import { Palette } from '../game/palette';
 import { Bram } from '../game/Bram';
 import { GridPuzzleEngine } from '../game/grid/GridPuzzleEngine';
 import { CellType, Direction } from '../game/grid/GridTypes';
-import { addPanel, addTitle } from '../game/ui';
+import { addPanel } from '../game/ui';
+import { GridAssets } from '../game/assets/GridAssetKeys';
 
 const TILE = 48;
 
-// v0.2 Broken Bridge layout: one push block in row 4 sits directly to
-// the left of a repair socket. Pushing right (the obvious direction)
-// bumps because the cell beyond is the socket — that's the
-// "blocks need empty space" teaching moment. Pushing up or down clears
-// the path. Single block, multiple solutions, beginner-readable.
+// Scale factors derived from asset dimensions so each sprite fills one TILE.
+// Wall tile_01: 162×159  → 48/162 ≈ 0.296
+// Floor tile_07/08: 153px → 48/153 ≈ 0.314
+// Socket tiles: ~150px → 48/150 = 0.32
+// Repair stone: 212px tall → 44/212 ≈ 0.208
+// Push block: 226px tall → 46/226 ≈ 0.204
+// Exits: 188px tall → 75/188 ≈ 0.399  (1.5× tile for arch presence)
+const SC_WALL    = 48 / 162;
+const SC_FLOOR   = 48 / 153;
+const SC_SOCKET  = 48 / 150;
+const SC_STONE   = 44 / 212;
+const SC_BLOCK   = 46 / 226;
+const SC_EXIT    = 75 / 188;
+
 const BROKEN_BRIDGE_MAP = `
 ##############
 #B...........#
@@ -25,30 +35,36 @@ const BROKEN_BRIDGE_MAP = `
 ##############
 `;
 
-const TIP_WELCOME = 'Collect stones, repair sockets, and push blocks out of the way.';
+const TIP_WELCOME     = 'Collect stones, repair sockets, and push blocks out of the way.';
 const TIP_INVALID_PUSH = 'Blocks need empty space behind them.';
-const TIP_FIRST_UNDO = 'Good — one step back is part of solving.';
-
-interface ButtonHandle {
-  destroy(): void;
-}
+const TIP_FIRST_UNDO  = 'Good — one step back is part of solving.';
 
 export class GridPuzzleLabScene extends Phaser.Scene {
   private engine!: GridPuzzleEngine;
   private gridOriginX = 0;
   private gridOriginY = 0;
+
+  // Graphics used only for the grid border and procedural fallback.
   private tileGraphics!: Phaser.GameObjects.Graphics;
+
+  // Sprite layers
+  private staticTileImages: Phaser.GameObjects.Image[] = [];
+  private dynamicCellImages: Phaser.GameObjects.Image[] = [];
+
   private bram!: Bram;
   private hudInventory!: Phaser.GameObjects.Text;
   private hudProgress!: Phaser.GameObjects.Text;
+  private tipText!: Phaser.GameObjects.Text;
+  private tipBannerImg: Phaser.GameObjects.Image | null = null;
   private busy = false;
   private successOpen = false;
-  private tipText!: Phaser.GameObjects.Text;
   private hasShownInvalidPushHint = false;
   private hasShownUndoHint = false;
   private moveCount = 0;
 
   constructor() { super('GridPuzzleLabScene'); }
+
+  // ─── lifecycle ───────────────────────────────────────────────────────────
 
   create() {
     this.cameras.main.setBackgroundColor(0x121814);
@@ -56,48 +72,313 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
     this.engine = new GridPuzzleEngine({ ascii: BROKEN_BRIDGE_MAP });
     const w = this.engine.width * TILE;
-    const h = this.engine.height * TILE;
     this.gridOriginX = Math.floor((1280 - w) / 2);
     this.gridOriginY = 132;
 
-    addTitle(this, 'Puzzle Lab: Broken Bridge', 40, 24, 28);
-    this.tipText = this.add.text(40, 62, TIP_WELCOME, {
-      fontFamily: 'Georgia, serif',
-      fontSize: '16px',
-      color: '#f0dcae',
-      wordWrap: { width: 1200 },
-      shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
-    });
+    this.buildTitleBar();
+    this.buildHUD();
 
-    addPanel(this, 28, 626, 1224, 70, 0.86);
-    this.hudInventory = this.add.text(60, 638, '', {
-      fontFamily: 'Georgia, serif',
-      fontSize: '20px',
-      color: '#ffe9ad'
-    });
-    this.hudProgress = this.add.text(60, 666, '', {
-      fontFamily: 'Georgia, serif',
-      fontSize: '16px',
-      color: '#f0dcae'
-    });
-    this.add.text(1240, 642, 'Arrows / WASD  ·  U undo  ·  R reset  ·  M menu', {
-      fontFamily: 'Georgia, serif',
-      fontSize: '15px',
-      color: '#a08866'
-    }).setOrigin(1, 0);
-
+    // Grid border (Graphics layer, depth 0 implicitly)
     this.tileGraphics = this.add.graphics();
-    this.renderGrid();
+    this.drawGridBorder();
 
+    // Static floor/wall sprite layer — built once, never changes
+    if (this.spritesReady()) {
+      this.buildStaticSpriteLayer();
+    }
+
+    // Initial dynamic cells (stones, sockets, push block, exit)
+    this.renderDynamicCells();
+
+    // Bram on top of everything in the grid
     const bramWorld = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
     this.bram = new Bram(this, bramWorld.x, bramWorld.y, { scale: 0.45 });
+    this.bram.setDepth(10);
     this.bram.setFacing(this.engine.bramFacing);
 
     this.bindKeys();
     this.refreshHUD();
   }
 
-  // ---------- input ----------
+  // ─── grid sprite layers ───────────────────────────────────────────────────
+
+  private spritesReady(): boolean {
+    return this.textures.exists(GridAssets.WALL);
+  }
+
+  private buildStaticSpriteLayer() {
+    for (let y = 0; y < this.engine.height; y++) {
+      for (let x = 0; x < this.engine.width; x++) {
+        const cell = this.engine.getCell(x, y);
+        if (cell !== 'wall' && cell !== 'floor') continue;
+        const { x: cx, y: cy } = this.tileToWorld(x, y);
+
+        if (cell === 'wall') {
+          this.staticTileImages.push(
+            this.add.image(cx, cy, GridAssets.WALL).setScale(SC_WALL).setDepth(2)
+          );
+        } else {
+          // Alternate floor variant on checkerboard pattern for visual texture
+          const key = (x + y) % 2 === 0 ? GridAssets.FLOOR : GridAssets.FLOOR_ALT;
+          this.staticTileImages.push(
+            this.add.image(cx, cy, key).setScale(SC_FLOOR).setDepth(1)
+          );
+        }
+      }
+    }
+  }
+
+  private renderDynamicCells() {
+    for (const img of this.dynamicCellImages) img.destroy();
+    this.dynamicCellImages = [];
+
+    if (!this.spritesReady()) {
+      // Procedural fallback: redraw everything via Graphics
+      this.tileGraphics.clear();
+      this.drawGridBorder();
+      for (let y = 0; y < this.engine.height; y++)
+        for (let x = 0; x < this.engine.width; x++)
+          this.drawCellProcedural(x, y, this.engine.getCell(x, y));
+      return;
+    }
+
+    for (let y = 0; y < this.engine.height; y++) {
+      for (let x = 0; x < this.engine.width; x++) {
+        const cell = this.engine.getCell(x, y);
+        if (cell === 'wall' || cell === 'floor') continue;
+
+        const { x: cx, y: cy } = this.tileToWorld(x, y);
+        const imgs = this.makeCellSprites(cx, cy, cell, x, y);
+        for (const img of imgs) this.dynamicCellImages.push(img);
+      }
+    }
+  }
+
+  private makeCellSprites(
+    cx: number, cy: number, cell: CellType, gx: number, gy: number
+  ): Phaser.GameObjects.Image[] {
+    const out: Phaser.GameObjects.Image[] = [];
+
+    // Each cell sits on a floor tile first
+    const floorKey = (gx + gy) % 2 === 0 ? GridAssets.FLOOR : GridAssets.FLOOR_ALT;
+    out.push(this.add.image(cx, cy, floorKey).setScale(SC_FLOOR).setDepth(1));
+
+    switch (cell) {
+      case 'stone':
+        out.push(
+          this.add.image(cx, cy + 2, GridAssets.REPAIR_STONE)
+            .setScale(SC_STONE).setDepth(4)
+        );
+        break;
+
+      case 'socket_empty':
+        out.push(
+          this.add.image(cx, cy, GridAssets.SOCKET_EMPTY)
+            .setScale(SC_SOCKET).setDepth(3)
+        );
+        break;
+
+      case 'socket_filled': {
+        const filled = this.add.image(cx, cy, GridAssets.SOCKET_FILLED)
+          .setScale(SC_SOCKET).setDepth(3);
+        // gentle pulse to show active repair energy
+        this.tweens.add({
+          targets: filled, alpha: 0.75, duration: 900,
+          yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+        out.push(filled);
+        break;
+      }
+
+      case 'push_block':
+        out.push(
+          this.add.image(cx, cy + 1, GridAssets.PUSH_BLOCK)
+            .setScale(SC_BLOCK).setDepth(4)
+        );
+        break;
+
+      case 'exit': {
+        const open = this.engine.allSocketsRepaired();
+        const key  = open ? GridAssets.EXIT_OPEN : GridAssets.EXIT_CLOSED;
+        const img  = this.add.image(cx, cy - 4, key).setScale(SC_EXIT).setDepth(5);
+        if (open) {
+          // soft glow pulse on the open portal
+          this.tweens.add({
+            targets: img, alpha: 0.82, duration: 700,
+            yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+          });
+        }
+        out.push(img);
+        break;
+      }
+    }
+
+    return out;
+  }
+
+  // ─── procedural drawCell (fallback only) ──────────────────────────────────
+
+  private drawGridBorder() {
+    const g = this.tileGraphics;
+    const w = this.engine.width * TILE;
+    const h = this.engine.height * TILE;
+    g.fillStyle(Palette.ink, 0.55);
+    g.fillRoundedRect(this.gridOriginX - 8, this.gridOriginY - 8, w + 16, h + 16, 12);
+    g.lineStyle(2, Palette.parchmentDark, 0.7);
+    g.strokeRoundedRect(this.gridOriginX - 8, this.gridOriginY - 8, w + 16, h + 16, 12);
+  }
+
+  private drawCellProcedural(gx: number, gy: number, cell: CellType) {
+    const px = this.gridOriginX + gx * TILE;
+    const py = this.gridOriginY + gy * TILE;
+    const cx = px + TILE / 2;
+    const cy = py + TILE / 2;
+    const g = this.tileGraphics;
+
+    if (cell === 'wall') {
+      g.fillStyle(0x3a3a30, 1).fillRect(px, py, TILE, TILE);
+      g.fillStyle(0x4a4a3e, 1).fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+      g.lineStyle(1, 0x1a1a14, 0.85).strokeRect(px, py, TILE, TILE);
+      g.lineStyle(1, 0x2a2a22, 0.8).lineBetween(px + 4, py + 22, px + TILE - 4, py + 22);
+      g.fillStyle(Palette.moss, 1).fillEllipse(px + 14, py + 4, 16, 6);
+      g.fillEllipse(px + TILE - 14, py + 6, 14, 5);
+      g.fillStyle(Palette.leaf, 0.85).fillCircle(px + 12, py + 3, 2);
+      g.fillCircle(px + TILE - 16, py + 5, 1.6);
+      return;
+    }
+
+    g.fillStyle(0x4a3a28, 1).fillRect(px, py, TILE, TILE);
+    g.fillStyle(0x5a4634, 0.55).fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
+    g.lineStyle(1, 0x2a1f15, 0.7).strokeRect(px, py, TILE, TILE);
+
+    if (cell === 'stone') {
+      g.fillStyle(0x1a2a3a, 0.6).fillEllipse(cx, cy + 4, 18, 5);
+      g.fillStyle(0x4a78a8, 1).fillCircle(cx, cy, 11);
+      g.fillStyle(0x6fb5e8, 1).fillCircle(cx, cy, 9);
+      g.lineStyle(2, 0xc8e6ff, 1).strokeCircle(cx, cy, 11);
+      g.fillStyle(0xeaf6ff, 0.85).fillCircle(cx - 3, cy - 3, 3);
+      g.fillStyle(0xffffff, 1).fillCircle(cx - 4, cy - 4, 1.4);
+    } else if (cell === 'socket_empty') {
+      g.fillStyle(0x14110d, 0.95).fillCircle(cx, cy, 15);
+      g.lineStyle(2, 0x2a2218, 1).strokeCircle(cx, cy, 15);
+      g.fillStyle(0x4a78a8, 0.18).fillCircle(cx, cy, 11);
+      g.lineStyle(1, 0x6fb5e8, 0.5).strokeCircle(cx, cy, 8);
+    } else if (cell === 'socket_filled') {
+      g.fillStyle(0x6fb5e8, 0.32).fillCircle(cx, cy, 19);
+      g.fillStyle(0x6fb5e8, 0.85).fillCircle(cx, cy, 13);
+      g.lineStyle(2, 0xc8e6ff, 1).strokeCircle(cx, cy, 13);
+      g.fillStyle(0xeaf6ff, 0.95).fillCircle(cx, cy, 5);
+      g.fillStyle(0xffffff, 1).fillCircle(cx - 2, cy - 2, 2);
+    } else if (cell === 'push_block') {
+      g.fillStyle(0x3a3a30, 1).fillRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 8);
+      g.lineStyle(2, 0x1a1a14, 1).strokeRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 8);
+      g.fillStyle(0x5a5a4a, 0.7).fillRoundedRect(px + 7, py + 9, TILE - 18, 6, 4);
+      g.fillStyle(Palette.moss, 1).fillEllipse(cx - 7, py + 12, 12, 5);
+      g.fillEllipse(cx + 8, py + 14, 8, 3);
+      g.fillStyle(Palette.leaf, 0.9).fillCircle(cx - 9, py + 11, 1.8);
+      g.fillCircle(cx + 9, py + 13, 1.4);
+      g.fillStyle(Palette.gold, 0.65);
+      g.fillTriangle(px + 8, cy - 3, px + 8, cy + 3, px + 13, cy);
+      g.fillTriangle(px + TILE - 8, cy - 3, px + TILE - 8, cy + 3, px + TILE - 13, cy);
+    } else if (cell === 'exit') {
+      const open = this.engine.allSocketsRepaired();
+      if (open) {
+        g.fillStyle(0x6fb5e8, 0.25).fillRoundedRect(px + 2, py + 2, TILE - 4, TILE - 4, 10);
+        g.fillStyle(0x6fb5e8, 0.55).fillRoundedRect(px + 6, py + 8, TILE - 12, TILE - 14, 9);
+        g.lineStyle(3, 0xc8e6ff, 1).strokeRoundedRect(px + 6, py + 8, TILE - 12, TILE - 14, 9);
+        g.lineStyle(2, 0xeaf6ff, 0.85);
+        g.beginPath(); g.arc(cx, cy + 4, 13, Math.PI, 0, false); g.strokePath();
+        g.fillStyle(0xffffff, 0.6).fillEllipse(cx, cy - 2, 10, 14);
+      } else {
+        g.fillStyle(0x4a4a3e, 1).fillRoundedRect(px + 4, py + 6, TILE - 8, TILE - 10, 9);
+        g.lineStyle(2, 0x1a1a14, 1).strokeRoundedRect(px + 4, py + 6, TILE - 8, TILE - 10, 9);
+        g.fillStyle(0x3a261a, 1).fillRoundedRect(px + 8, py + 10, TILE - 16, TILE - 16, 5);
+        g.lineStyle(1, 0x1a1008, 1).strokeRoundedRect(px + 8, py + 10, TILE - 16, TILE - 16, 5);
+        g.fillStyle(0x4a4036, 1).fillRect(px + 8, cy - 2, TILE - 16, 3);
+        g.fillStyle(0x14110d, 1).fillCircle(cx, cy, 1.8);
+      }
+    }
+  }
+
+  // ─── title / HUD ──────────────────────────────────────────────────────────
+
+  private buildTitleBar() {
+    this.add.text(40, 24, 'Puzzle Lab: Broken Bridge', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '28px',
+      color: '#f0dcae',
+      shadow: { offsetX: 1, offsetY: 1, color: '#000', blur: 3, fill: true }
+    }).setDepth(15);
+
+    // Tip banner: sprite bg if loaded, else bare text
+    const tipY = 65;
+    if (this.spritesReady()) {
+      // tip_banner is 394×83, display at half height to fit the bar
+      this.tipBannerImg = this.add.image(640, tipY + 8, GridAssets.TIP_BANNER)
+        .setDisplaySize(900, 46)
+        .setAlpha(0.92)
+        .setDepth(14);
+    }
+
+    this.tipText = this.add.text(
+      this.spritesReady() ? 640 : 40,
+      tipY,
+      TIP_WELCOME,
+      {
+        fontFamily: 'Georgia, serif',
+        fontSize: '16px',
+        color: this.spritesReady() ? '#5a2e0a' : '#f0dcae',
+        wordWrap: { width: 820 },
+        shadow: this.spritesReady()
+          ? undefined
+          : { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
+      }
+    )
+      .setOrigin(this.spritesReady() ? 0.5 : 0, 0)
+      .setDepth(15);
+  }
+
+  private buildHUD() {
+    addPanel(this, 28, 626, 1224, 70, 0.86);
+
+    this.hudInventory = this.add.text(68, 638, '', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '20px',
+      color: '#ffe9ad'
+    }).setDepth(15);
+
+    this.hudProgress = this.add.text(68, 666, '', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '16px',
+      color: '#f0dcae'
+    }).setDepth(15);
+
+    // Undo / Reset icon buttons (decorative — keyboard shortcuts still primary)
+    if (this.spritesReady()) {
+      const iconScale = 0.48;
+      this.add.image(1148, 652, GridAssets.BTN_UNDO)
+        .setScale(iconScale).setDepth(15).setAlpha(0.9);
+      this.add.text(1168, 637, 'U', {
+        fontFamily: 'Georgia, serif', fontSize: '12px', color: '#ffe9ad'
+      }).setDepth(16).setAlpha(0.7);
+
+      this.add.image(1204, 652, GridAssets.BTN_RESET)
+        .setScale(iconScale).setDepth(15).setAlpha(0.9);
+      this.add.text(1224, 637, 'R', {
+        fontFamily: 'Georgia, serif', fontSize: '12px', color: '#ffe9ad'
+      }).setDepth(16).setAlpha(0.7);
+
+      this.add.text(1240, 666, 'Arrows / WASD  ·  M menu', {
+        fontFamily: 'Georgia, serif', fontSize: '14px', color: '#a08866'
+      }).setOrigin(1, 0).setDepth(15);
+    } else {
+      this.add.text(1240, 642, 'Arrows / WASD  ·  U undo  ·  R reset  ·  M menu', {
+        fontFamily: 'Georgia, serif', fontSize: '15px', color: '#a08866'
+      }).setOrigin(1, 0).setDepth(15);
+    }
+  }
+
+  // ─── input ────────────────────────────────────────────────────────────────
 
   private bindKeys() {
     const kb = this.input.keyboard;
@@ -130,11 +411,12 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     }
 
     this.moveCount += 1;
-
     this.busy = true;
+
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
-    this.renderGrid();
+    this.renderDynamicCells();
     this.refreshHUD();
+
     this.tweens.add({
       targets: this.bram,
       x: target.x,
@@ -157,28 +439,13 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
     this.bram.setPosition(target.x, target.y);
     this.bram.setFacing(this.engine.bramFacing);
-    this.renderGrid();
+    this.renderDynamicCells();
     this.refreshHUD();
 
-    // Fire the "step back is part of solving" hint the first time the
-    // player undoes a real move (not before they've moved at all).
     if (this.moveCount > 0 && !this.hasShownUndoHint) {
       this.hasShownUndoHint = true;
       this.setTip(TIP_FIRST_UNDO);
     }
-  }
-
-  private setTip(text: string) {
-    if (!this.tipText) return;
-    this.tipText.setText(text);
-    this.tipText.setAlpha(0);
-    this.tweens.killTweensOf(this.tipText);
-    this.tweens.add({
-      targets: this.tipText,
-      alpha: 1,
-      duration: 240,
-      ease: 'Quad.easeOut'
-    });
   }
 
   private attemptReset() {
@@ -188,11 +455,232 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
     this.bram.setPosition(target.x, target.y);
     this.bram.setFacing(this.engine.bramFacing);
-    this.renderGrid();
+    this.renderDynamicCells();
     this.refreshHUD();
   }
 
-  // ---------- rendering ----------
+  private setTip(text: string) {
+    if (!this.tipText) return;
+    this.tipText.setText(text);
+    this.tipText.setAlpha(0);
+    if (this.tipBannerImg) this.tipBannerImg.setAlpha(0);
+    this.tweens.killTweensOf(this.tipText);
+    this.tweens.add({ targets: this.tipText, alpha: 1, duration: 240, ease: 'Quad.easeOut' });
+    if (this.tipBannerImg) {
+      this.tweens.add({ targets: this.tipBannerImg, alpha: 0.92, duration: 240, ease: 'Quad.easeOut' });
+    }
+  }
+
+  // ─── HUD refresh ─────────────────────────────────────────────────────────
+
+  private refreshHUD() {
+    const carrying = this.engine.stonesCarried;
+    const total    = this.engine.countSocketsTotal();
+    const done     = this.engine.countSocketsRepaired();
+    const gateNote = this.engine.allSocketsRepaired() ? '    (gate open — step on E)' : '';
+    this.hudInventory.setText(`Stones carried: ${carrying}`);
+    this.hudProgress.setText(`Sockets repaired: ${done} / ${total}${gateNote}`);
+  }
+
+  // ─── VFX ──────────────────────────────────────────────────────────────────
+
+  private playBump(dir: Direction) {
+    const dx = dir === 'left' ? -6 : dir === 'right' ? 6 : 0;
+    const dy = dir === 'up'   ? -6 : dir === 'down'  ? 6 : 0;
+    const startX = this.bram.x;
+    const startY = this.bram.y;
+    this.busy = true;
+    this.tweens.add({
+      targets: this.bram,
+      x: startX + dx, y: startY + dy,
+      duration: 80, yoyo: true, ease: 'Sine.easeOut',
+      onComplete: () => { this.busy = false; this.bram.setPosition(startX, startY); }
+    });
+  }
+
+  private spawnPickupSparkle(x: number, y: number) {
+    if (this.spritesReady()) {
+      // Sprite VFX: blue sparkle bursting upward from pickup point
+      const s = this.add.image(x, y + 4, GridAssets.VFX_BLUE_PICKUP)
+        .setScale(0.35).setDepth(50).setAlpha(0.95);
+      this.tweens.add({
+        targets: s, y: y - 30, alpha: 0, scaleX: 0.5, scaleY: 0.5,
+        duration: 520, ease: 'Quad.easeOut',
+        onComplete: () => s.destroy()
+      });
+    } else {
+      for (let i = 0; i < 6; i++) {
+        const star = this.add.text(x, y, '✦', {
+          fontFamily: 'Georgia, serif', fontSize: '14px', color: '#c8e6ff'
+        }).setOrigin(0.5).setDepth(50);
+        const a = (i / 6) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
+        this.tweens.add({
+          targets: star,
+          x: x + Math.cos(a) * 26, y: y + Math.sin(a) * 26 - 8,
+          alpha: 0, duration: 520,
+          onComplete: () => star.destroy()
+        });
+      }
+    }
+  }
+
+  private spawnRepairBurst(x: number, y: number) {
+    if (this.spritesReady()) {
+      // Burst image expands and fades
+      const burst = this.add.image(x, y, GridAssets.VFX_BLUE_BURST)
+        .setScale(0.22).setDepth(45).setAlpha(0.9);
+      this.tweens.add({
+        targets: burst, scale: 0.58, alpha: 0,
+        duration: 680, ease: 'Quad.easeOut',
+        onComplete: () => burst.destroy()
+      });
+    } else {
+      const halo = this.add.graphics().setDepth(40);
+      halo.fillStyle(0x6fb5e8, 0.5).fillCircle(x, y, 24);
+      halo.fillStyle(0xc8e6ff, 0.25).fillCircle(x, y, 42);
+      this.tweens.add({ targets: halo, alpha: 0, duration: 650, onComplete: () => halo.destroy() });
+    }
+
+    const tick = this.add.text(x + 16, y - 22, 'It stays.', {
+      fontFamily: 'Georgia, serif', fontStyle: 'italic',
+      fontSize: '14px', color: '#c8e6ff'
+    }).setDepth(50);
+    this.tweens.add({
+      targets: tick, y: tick.y - 18, alpha: 0, duration: 750,
+      onComplete: () => tick.destroy()
+    });
+  }
+
+  // ─── success state ────────────────────────────────────────────────────────
+
+  private showSuccess() {
+    this.successOpen = true;
+    this.bram.celebrate();
+
+    const depth = 1000;
+    const dim = this.add.graphics().setDepth(depth);
+    dim.fillStyle(0x000000, 0.55).fillRect(0, 0, 1280, 720);
+
+    if (this.spritesReady()) {
+      this.showSuccessSprite(depth);
+    } else {
+      this.showSuccessProcedural(depth);
+    }
+
+    // Gold victory sparkles across the screen
+    for (let i = 0; i < 8; i++) {
+      const sx = Phaser.Math.Between(300, 980);
+      const sy = Phaser.Math.Between(180, 520);
+      const key = this.spritesReady()
+        ? (i % 2 === 0 ? GridAssets.VFX_GOLD_VICTORY : GridAssets.VFX_GOLD_SHOWER)
+        : null;
+
+      if (key) {
+        const s = this.add.image(sx, sy, key)
+          .setScale(Phaser.Math.FloatBetween(0.18, 0.34))
+          .setDepth(depth + 2).setAlpha(0);
+        this.tweens.add({
+          targets: s, alpha: 0.9, y: sy - 28,
+          duration: 800, delay: i * 80, ease: 'Quad.easeOut'
+        });
+        this.tweens.add({
+          targets: s, alpha: 0, delay: 800 + i * 80, duration: 600,
+          onComplete: () => s.destroy()
+        });
+      } else {
+        const star = this.add.text(sx, sy, '✦', {
+          fontFamily: 'Georgia, serif',
+          fontSize: `${Phaser.Math.Between(14, 22)}px`,
+          color: '#ffdf7a'
+        }).setOrigin(0.5).setDepth(depth + 2).setAlpha(0);
+        this.tweens.add({ targets: star, alpha: 0.9, y: sy - 30, duration: 900, delay: i * 70, ease: 'Quad.easeOut' });
+        this.tweens.add({ targets: star, alpha: 0, delay: 900 + i * 70, duration: 600, onComplete: () => star.destroy() });
+      }
+    }
+  }
+
+  private showSuccessSprite(depth: number) {
+    // Parchment panel (panel_medium: 286×295) scaled to 480×495
+    const panel = this.add.image(640, 345, GridAssets.PANEL_MEDIUM)
+      .setDisplaySize(500, 515).setDepth(depth + 1);
+    panel.setAlpha(0);
+    this.tweens.add({ targets: panel, alpha: 1, duration: 280, ease: 'Quad.easeOut' });
+
+    // "PUZZLE SOLVED!" banner (479×211) scaled to fit
+    const banner = this.add.image(640, 210, GridAssets.SOLVED_BANNER)
+      .setDisplaySize(580, 255).setDepth(depth + 2);
+    banner.setAlpha(0);
+    this.tweens.add({ targets: banner, alpha: 1, duration: 300, delay: 80, ease: 'Back.easeOut' });
+
+    // Nilo portrait in corner
+    const portrait = this.add.image(432, 330, GridAssets.PORTRAIT_NILO)
+      .setDisplaySize(110, 77).setDepth(depth + 3).setAlpha(0);
+    this.tweens.add({ targets: portrait, alpha: 0.92, duration: 260, delay: 120 });
+
+    const niloLine = this.add.text(640, 320, '"It stayed."', {
+      fontFamily: 'Georgia, serif', fontStyle: 'italic',
+      fontSize: '22px', color: '#2a1f12'
+    }).setOrigin(0.5).setDepth(depth + 3).setAlpha(0);
+
+    const bramLine = this.add.text(640, 360, '"Just enough."  — Bram', {
+      fontFamily: 'Georgia, serif', fontStyle: 'italic',
+      fontSize: '20px', color: '#3a2a1a'
+    }).setOrigin(0.5).setDepth(depth + 3).setAlpha(0);
+
+    this.tweens.add({ targets: [niloLine, bramLine], alpha: 1, duration: 300, delay: 200 });
+
+    this.makeButton(480, 408, 320, 50, 'Return to menu', depth + 3, () => this.scene.start('MenuScene'));
+    void [panel, banner, portrait];
+  }
+
+  private showSuccessProcedural(depth: number) {
+    const panel = this.add.graphics().setDepth(depth + 1);
+    panel.fillStyle(Palette.parchment, 0.97);
+    panel.lineStyle(4, Palette.parchmentDark, 1);
+    panel.fillRoundedRect(360, 220, 560, 260, 20);
+    panel.strokeRoundedRect(360, 220, 560, 260, 20);
+    panel.lineStyle(2, Palette.gold, 0.55);
+    panel.strokeRoundedRect(372, 232, 536, 236, 16);
+
+    this.add.text(640, 260, 'The bridge holds.', {
+      fontFamily: 'Georgia, serif', fontSize: '28px',
+      color: '#7a4a18', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(depth + 2);
+
+    this.add.text(640, 312, '"It stayed."   — Nilo', {
+      fontFamily: 'Georgia, serif', fontStyle: 'italic',
+      fontSize: '22px', color: '#2a1f12'
+    }).setOrigin(0.5).setDepth(depth + 2);
+
+    this.add.text(640, 350, '"Just enough."   — Bram', {
+      fontFamily: 'Georgia, serif', fontStyle: 'italic',
+      fontSize: '22px', color: '#2a1f12'
+    }).setOrigin(0.5).setDepth(depth + 2);
+
+    this.makeButton(480, 408, 320, 50, 'Return to menu', depth + 2, () => this.scene.start('MenuScene'));
+  }
+
+  private makeButton(
+    x: number, y: number, w: number, h: number,
+    label: string, depth: number, onClick: () => void
+  ) {
+    const bg = this.add.graphics().setDepth(depth);
+    bg.fillStyle(Palette.bark, 0.95);
+    bg.lineStyle(3, Palette.gold, 0.9);
+    bg.fillRoundedRect(x, y, w, h, 14);
+    bg.strokeRoundedRect(x, y, w, h, 14);
+    const text = this.add.text(x + w / 2, y + h / 2, label, {
+      fontFamily: 'Georgia, serif', fontSize: '24px', color: '#ffe9ad'
+    }).setOrigin(0.5).setDepth(depth);
+    const hit = this.add.zone(x + w / 2, y + h / 2, w, h)
+      .setInteractive({ useHandCursor: true }).setDepth(depth);
+    hit.on('pointerover', () => text.setScale(1.04));
+    hit.on('pointerout',  () => text.setScale(1));
+    hit.on('pointerdown', onClick);
+    return { destroy() { bg.destroy(); text.destroy(); hit.destroy(); } };
+  }
+
+  // ─── backdrop ─────────────────────────────────────────────────────────────
 
   private drawBackdrop() {
     const g = this.add.graphics();
@@ -211,328 +699,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     }
   }
 
-  private renderGrid() {
-    const g = this.tileGraphics;
-    g.clear();
-
-    const w = this.engine.width * TILE;
-    const h = this.engine.height * TILE;
-    g.fillStyle(Palette.ink, 0.55);
-    g.fillRoundedRect(this.gridOriginX - 8, this.gridOriginY - 8, w + 16, h + 16, 12);
-    g.lineStyle(2, Palette.parchmentDark, 0.7);
-    g.strokeRoundedRect(this.gridOriginX - 8, this.gridOriginY - 8, w + 16, h + 16, 12);
-
-    for (let y = 0; y < this.engine.height; y++) {
-      for (let x = 0; x < this.engine.width; x++) {
-        this.drawCell(x, y, this.engine.getCell(x, y));
-      }
-    }
-  }
-
-  private drawCell(gx: number, gy: number, cell: CellType) {
-    const px = this.gridOriginX + gx * TILE;
-    const py = this.gridOriginY + gy * TILE;
-    const cx = px + TILE / 2;
-    const cy = py + TILE / 2;
-    const g = this.tileGraphics;
-
-    // --- Wall: mossy grey stone with moss/vines along the top edge.
-    if (cell === 'wall') {
-      g.fillStyle(0x3a3a30, 1);
-      g.fillRect(px, py, TILE, TILE);
-      g.fillStyle(0x4a4a3e, 1);
-      g.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
-      g.lineStyle(1, 0x1a1a14, 0.85);
-      g.strokeRect(px, py, TILE, TILE);
-      // mortar joint
-      g.lineStyle(1, 0x2a2a22, 0.8);
-      g.lineBetween(px + 4, py + 22, px + TILE - 4, py + 22);
-      // moss tufts on the top edge
-      g.fillStyle(Palette.moss, 1);
-      g.fillEllipse(px + 14, py + 4, 16, 6);
-      g.fillEllipse(px + TILE - 14, py + 6, 14, 5);
-      g.fillStyle(Palette.leaf, 0.85);
-      g.fillCircle(px + 12, py + 3, 2);
-      g.fillCircle(px + TILE - 16, py + 5, 1.6);
-      return;
-    }
-
-    // --- Floor: warm sandy stone tile.
-    g.fillStyle(0x4a3a28, 1);
-    g.fillRect(px, py, TILE, TILE);
-    g.fillStyle(0x5a4634, 0.55);
-    g.fillRect(px + 1, py + 1, TILE - 2, TILE - 2);
-    g.lineStyle(1, 0x2a1f15, 0.7);
-    g.strokeRect(px, py, TILE, TILE);
-
-    if (cell === 'stone') {
-      // Blue repair gem — Nilo's potential, ready to be placed.
-      g.fillStyle(0x1a2a3a, 0.6);
-      g.fillEllipse(cx, cy + 4, 18, 5);
-      g.fillStyle(0x4a78a8, 1);
-      g.fillCircle(cx, cy, 11);
-      g.fillStyle(0x6fb5e8, 1);
-      g.fillCircle(cx, cy, 9);
-      g.lineStyle(2, 0xc8e6ff, 1);
-      g.strokeCircle(cx, cy, 11);
-      g.fillStyle(0xeaf6ff, 0.85);
-      g.fillCircle(cx - 3, cy - 3, 3);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(cx - 4, cy - 4, 1.4);
-    } else if (cell === 'socket_empty') {
-      // Recessed socket — dark stone with a faint blue hint
-      // showing where Nilo's energy belongs.
-      g.fillStyle(0x14110d, 0.95);
-      g.fillCircle(cx, cy, 15);
-      g.lineStyle(2, 0x2a2218, 1);
-      g.strokeCircle(cx, cy, 15);
-      g.fillStyle(0x4a78a8, 0.18);
-      g.fillCircle(cx, cy, 11);
-      g.lineStyle(1, 0x6fb5e8, 0.5);
-      g.strokeCircle(cx, cy, 8);
-    } else if (cell === 'socket_filled') {
-      // Filled — Nilo's blue energy holding the stone in place.
-      g.fillStyle(0x6fb5e8, 0.32);
-      g.fillCircle(cx, cy, 19);
-      g.fillStyle(0x6fb5e8, 0.85);
-      g.fillCircle(cx, cy, 13);
-      g.lineStyle(2, 0xc8e6ff, 1);
-      g.strokeCircle(cx, cy, 13);
-      g.fillStyle(0xeaf6ff, 0.95);
-      g.fillCircle(cx, cy, 5);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(cx - 2, cy - 2, 2);
-    } else if (cell === 'push_block') {
-      // Mossy boulder — clearly distinct from walls and floor.
-      g.fillStyle(0x3a3a30, 1);
-      g.fillRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 8);
-      g.lineStyle(2, 0x1a1a14, 1);
-      g.strokeRoundedRect(px + 5, py + 7, TILE - 10, TILE - 12, 8);
-      // top stone face highlight
-      g.fillStyle(0x5a5a4a, 0.7);
-      g.fillRoundedRect(px + 7, py + 9, TILE - 18, 6, 4);
-      // moss tufts on top (denser than wall moss to read as "movable boulder")
-      g.fillStyle(Palette.moss, 1);
-      g.fillEllipse(cx - 7, py + 12, 12, 5);
-      g.fillEllipse(cx + 8, py + 14, 8, 3);
-      g.fillStyle(Palette.leaf, 0.9);
-      g.fillCircle(cx - 9, py + 11, 1.8);
-      g.fillCircle(cx + 9, py + 13, 1.4);
-      // push-direction hints on left/right edges
-      g.fillStyle(Palette.gold, 0.65);
-      g.fillTriangle(px + 8, cy - 3, px + 8, cy + 3, px + 13, cy);
-      g.fillTriangle(px + TILE - 8, cy - 3, px + TILE - 8, cy + 3, px + TILE - 13, cy);
-    } else if (cell === 'exit') {
-      const open = this.engine.allSocketsRepaired();
-      if (open) {
-        // Blue glowing portal under a stone arch — Nilo's energy
-        // making the way safe to cross.
-        g.fillStyle(0x6fb5e8, 0.25);
-        g.fillRoundedRect(px + 2, py + 2, TILE - 4, TILE - 4, 10);
-        g.fillStyle(0x6fb5e8, 0.55);
-        g.fillRoundedRect(px + 6, py + 8, TILE - 12, TILE - 14, 9);
-        g.lineStyle(3, 0xc8e6ff, 1);
-        g.strokeRoundedRect(px + 6, py + 8, TILE - 12, TILE - 14, 9);
-        // arch highlight
-        g.lineStyle(2, 0xeaf6ff, 0.85);
-        g.beginPath();
-        g.arc(cx, cy + 4, 13, Math.PI, 0, false);
-        g.strokePath();
-        // catchlight at center
-        g.fillStyle(0xffffff, 0.6);
-        g.fillEllipse(cx, cy - 2, 10, 14);
-      } else {
-        // Closed wooden door inside a stone arch.
-        g.fillStyle(0x4a4a3e, 1);
-        g.fillRoundedRect(px + 4, py + 6, TILE - 8, TILE - 10, 9);
-        g.lineStyle(2, 0x1a1a14, 1);
-        g.strokeRoundedRect(px + 4, py + 6, TILE - 8, TILE - 10, 9);
-        // wooden door
-        g.fillStyle(0x3a261a, 1);
-        g.fillRoundedRect(px + 8, py + 10, TILE - 16, TILE - 16, 5);
-        g.lineStyle(1, 0x1a1008, 1);
-        g.strokeRoundedRect(px + 8, py + 10, TILE - 16, TILE - 16, 5);
-        // metal banding
-        g.fillStyle(0x4a4036, 1);
-        g.fillRect(px + 8, cy - 2, TILE - 16, 3);
-        // keyhole
-        g.fillStyle(0x14110d, 1);
-        g.fillCircle(cx, cy, 1.8);
-      }
-    }
-  }
-
-  private refreshHUD() {
-    const carrying = this.engine.stonesCarried;
-    const total = this.engine.countSocketsTotal();
-    const done = this.engine.countSocketsRepaired();
-    const gateNote = this.engine.allSocketsRepaired() ? '    (gate open — step on E)' : '';
-    this.hudInventory.setText(`Stones carried: ${carrying}`);
-    this.hudProgress.setText(`Sockets repaired: ${done} / ${total}${gateNote}`);
-  }
-
-  // ---------- effects ----------
-
-  private playBump(dir: Direction) {
-    const dx = dir === 'left' ? -6 : dir === 'right' ? 6 : 0;
-    const dy = dir === 'up' ? -6 : dir === 'down' ? 6 : 0;
-    const startX = this.bram.x;
-    const startY = this.bram.y;
-    this.busy = true;
-    this.tweens.add({
-      targets: this.bram,
-      x: startX + dx,
-      y: startY + dy,
-      duration: 80,
-      yoyo: true,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        this.busy = false;
-        this.bram.setPosition(startX, startY);
-      }
-    });
-  }
-
-  private spawnPickupSparkle(x: number, y: number) {
-    // Pale-blue sparkles — Nilo's potential moving with the stone.
-    for (let i = 0; i < 6; i++) {
-      const s = this.add.text(x, y, '✦', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '14px',
-        color: '#c8e6ff'
-      }).setOrigin(0.5).setDepth(50);
-      const a = (i / 6) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.25, 0.25);
-      this.tweens.add({
-        targets: s,
-        x: x + Math.cos(a) * 26,
-        y: y + Math.sin(a) * 26 - 8,
-        alpha: 0,
-        duration: 520,
-        onComplete: () => s.destroy()
-      });
-    }
-  }
-
-  private spawnRepairBurst(x: number, y: number) {
-    // Blue ring burst — Nilo's energy taking hold in the socket.
-    const halo = this.add.graphics().setDepth(40);
-    halo.fillStyle(0x6fb5e8, 0.5).fillCircle(x, y, 24);
-    halo.fillStyle(0xc8e6ff, 0.25).fillCircle(x, y, 42);
-    this.tweens.add({
-      targets: halo,
-      alpha: 0,
-      duration: 650,
-      onComplete: () => halo.destroy()
-    });
-    const tick = this.add.text(x + 16, y - 22, 'It stays.', {
-      fontFamily: 'Georgia, serif',
-      fontStyle: 'italic',
-      fontSize: '14px',
-      color: '#c8e6ff'
-    }).setDepth(50);
-    this.tweens.add({
-      targets: tick,
-      y: tick.y - 18,
-      alpha: 0,
-      duration: 750,
-      onComplete: () => tick.destroy()
-    });
-  }
-
-  // ---------- success state ----------
-
-  private showSuccess() {
-    this.successOpen = true;
-    this.bram.celebrate();
-
-    const depth = 1000;
-    const dim = this.add.graphics().setDepth(depth);
-    dim.fillStyle(0x000000, 0.55).fillRect(0, 0, 1280, 720);
-
-    const panel = this.add.graphics().setDepth(depth);
-    panel.fillStyle(Palette.parchment, 0.97);
-    panel.lineStyle(4, Palette.parchmentDark, 1);
-    panel.fillRoundedRect(360, 220, 560, 260, 20);
-    panel.strokeRoundedRect(360, 220, 560, 260, 20);
-    panel.lineStyle(2, Palette.gold, 0.55);
-    panel.strokeRoundedRect(372, 232, 536, 236, 16);
-
-    const title = this.add.text(640, 260, 'The bridge holds.', {
-      fontFamily: 'Georgia, serif',
-      fontSize: '28px',
-      color: '#7a4a18',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(depth);
-
-    const niloLine = this.add.text(640, 312, '“It stayed.”   — Nilo', {
-      fontFamily: 'Georgia, serif',
-      fontStyle: 'italic',
-      fontSize: '22px',
-      color: '#2a1f12'
-    }).setOrigin(0.5).setDepth(depth);
-
-    const bramLine = this.add.text(640, 350, '“Just enough.”   — Bram', {
-      fontFamily: 'Georgia, serif',
-      fontStyle: 'italic',
-      fontSize: '22px',
-      color: '#2a1f12'
-    }).setOrigin(0.5).setDepth(depth);
-
-    this.makeButton(480, 408, 320, 50, 'Return to menu', depth, () => this.scene.start('MenuScene'));
-
-    // tiny ambient sparkles around the panel
-    for (let i = 0; i < 10; i++) {
-      const sx = Phaser.Math.Between(360, 920);
-      const sy = Phaser.Math.Between(220, 480);
-      const s = this.add.text(sx, sy, '✦', {
-        fontFamily: 'Georgia, serif',
-        fontSize: `${Phaser.Math.Between(14, 22)}px`,
-        color: '#ffdf7a'
-      }).setOrigin(0.5).setDepth(depth + 1).setAlpha(0);
-      this.tweens.add({
-        targets: s,
-        alpha: 0.9,
-        y: sy - 30,
-        duration: 900,
-        delay: i * 70,
-        ease: 'Quad.easeOut'
-      });
-      this.tweens.add({
-        targets: s,
-        alpha: 0,
-        delay: 900 + i * 70,
-        duration: 600,
-        onComplete: () => s.destroy()
-      });
-    }
-
-    // refs not strictly required, but listed to satisfy noUnusedLocals if enabled later
-    void [dim, panel, title, niloLine, bramLine];
-  }
-
-  private makeButton(x: number, y: number, w: number, h: number, label: string, depth: number, onClick: () => void): ButtonHandle {
-    const bg = this.add.graphics().setDepth(depth);
-    bg.fillStyle(Palette.bark, 0.95);
-    bg.lineStyle(3, Palette.gold, 0.9);
-    bg.fillRoundedRect(x, y, w, h, 14);
-    bg.strokeRoundedRect(x, y, w, h, 14);
-    const text = this.add.text(x + w / 2, y + h / 2, label, {
-      fontFamily: 'Georgia, serif',
-      fontSize: '24px',
-      color: '#ffe9ad'
-    }).setOrigin(0.5).setDepth(depth);
-    const hit = this.add.zone(x + w / 2, y + h / 2, w, h)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(depth);
-    hit.on('pointerover', () => text.setScale(1.04));
-    hit.on('pointerout', () => text.setScale(1));
-    hit.on('pointerdown', onClick);
-    return {
-      destroy() { bg.destroy(); text.destroy(); hit.destroy(); }
-    };
-  }
-
-  // ---------- coordinates ----------
+  // ─── coordinates ─────────────────────────────────────────────────────────
 
   private tileToWorld(gx: number, gy: number): { x: number; y: number } {
     return {
