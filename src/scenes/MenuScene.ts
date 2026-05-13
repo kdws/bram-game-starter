@@ -55,7 +55,8 @@ export class MenuScene extends Phaser.Scene {
     addButton(this, 'Platform', 244, 562, 130, 34, () => this.scene.start('PlatformScene'));
     addButton(this, 'Top-Down', 384, 562, 136, 34, () => this.scene.start('TopDownScene'));
     addButton(this, '◴ Clocktower Marsh: Tell Time', 104, 602, 416, 34, () => this.scene.start('ClockTowerScene'));
-    addButton(this, '▦ Puzzle Lab: Grid Repair Room', 104, 640, 416, 34, () => this.scene.start('GridPuzzleLabScene'));
+    addButton(this, '▦ Puzzle Lab: Broken Bridge', 104, 640, 200, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'broken_bridge' }));
+    addButton(this, '▦ Stone Garden', 314, 640, 206, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'stone_garden' }));
 
     // Reset progress: sprite back-icon + label if loaded, fallback otherwise
     if (this.hasUiSprites()) {

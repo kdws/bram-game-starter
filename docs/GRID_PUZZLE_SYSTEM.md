@@ -280,6 +280,35 @@ The scene must:
 
 ---
 
+## Multi-room support (v0.4 — 2026-05-12)
+
+`GridPuzzleLabScene` is now driven by room config data in
+`src/data/puzzleRooms.ts`. Each room is a `PuzzleRoom` with: `id`,
+`title`, ASCII `map`, three `hints`, and a `success` block. The scene
+receives the room id via Phaser scene init data:
+
+```ts
+this.scene.start('GridPuzzleLabScene', { roomId: 'stone_garden' });
+```
+
+Adding a new room is two steps:
+
+1. Author the room in `src/data/puzzleRooms.ts`.
+2. Add a menu button that starts the scene with the new `roomId`.
+
+The scene class is reused — no new scene class needed unless the room
+introduces a fundamentally new mechanic (in which case extend the
+engine first, then the scene).
+
+### Available rooms
+
+| Room id | Title | Mechanic |
+|---|---|---|
+| `broken_bridge` | Puzzle Lab: Broken Bridge | One push block, four stones, four sockets — the teaching room. |
+| `stone_garden`  | Puzzle Lab: Stone Garden  | **Twin push blocks**, four stones, four sockets — symmetric pair of push moments, tests pattern recognition. |
+
+---
+
 ## First playable demo: Broken Bridge (v0.2)
 
 Map (in `GridPuzzleLabScene.ts`):

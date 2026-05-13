@@ -5,6 +5,7 @@ import { GridPuzzleEngine } from '../game/grid/GridPuzzleEngine';
 import { CellType, Direction } from '../game/grid/GridTypes';
 import { addPanel } from '../game/ui';
 import { GridAssets } from '../game/assets/GridAssetKeys';
+import { PUZZLE_ROOMS, DEFAULT_ROOM_ID, PuzzleRoom } from '../data/puzzleRooms';
 
 const TILE = 48;
 
@@ -26,22 +27,8 @@ const SC_EXIT    = 75 / 188;
 const TAP_MAX_DRAG    = 14; // ≤ this counts as a tap
 const SWIPE_THRESHOLD = 30; // ≥ this commits a swipe move
 
-const BROKEN_BRIDGE_MAP = `
-##############
-#B...........#
-#.s.....o....#
-#............#
-#.s....bo....#
-#............#
-#.s.....o....#
-#............#
-#.s.....o...E#
-##############
-`;
-
-const TIP_WELCOME     = 'Collect stones, repair sockets, and push blocks out of the way.';
-const TIP_INVALID_PUSH = 'Blocks need empty space behind them.';
-const TIP_FIRST_UNDO  = 'Good — one step back is part of solving.';
+// Map / hint / success copy now lives in `src/data/puzzleRooms.ts`.
+// The scene receives `roomId` via init data and looks up the config.
 
 export class GridPuzzleLabScene extends Phaser.Scene {
   private engine!: GridPuzzleEngine;
@@ -66,8 +53,24 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   private hasShownUndoHint = false;
   private moveCount = 0;
   private pointerStart: { x: number; y: number } | null = null;
+  private room: PuzzleRoom = PUZZLE_ROOMS[DEFAULT_ROOM_ID];
 
   constructor() { super('GridPuzzleLabScene'); }
+
+  init(data: { roomId?: string }) {
+    const id = data?.roomId ?? DEFAULT_ROOM_ID;
+    this.room = PUZZLE_ROOMS[id] ?? PUZZLE_ROOMS[DEFAULT_ROOM_ID];
+    // Reset per-scene state so re-entering doesn't carry hint-fired flags
+    this.hasShownInvalidPushHint = false;
+    this.hasShownUndoHint = false;
+    this.moveCount = 0;
+    this.pointerStart = null;
+    this.busy = false;
+    this.successOpen = false;
+    this.staticTileImages = [];
+    this.dynamicCellImages = [];
+    this.tipBannerImg = null;
+  }
 
   // ─── lifecycle ───────────────────────────────────────────────────────────
 
@@ -75,7 +78,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x121814);
     this.drawBackdrop();
 
-    this.engine = new GridPuzzleEngine({ ascii: BROKEN_BRIDGE_MAP });
+    this.engine = new GridPuzzleEngine({ ascii: this.room.map });
     const w = this.engine.width * TILE;
     this.gridOriginX = Math.floor((1280 - w) / 2);
     this.gridOriginY = 132;
@@ -366,7 +369,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   // ─── title / HUD ──────────────────────────────────────────────────────────
 
   private buildTitleBar() {
-    this.add.text(40, 24, 'Puzzle Lab: Broken Bridge', {
+    this.add.text(40, 24, this.room.title, {
       fontFamily: 'Georgia, serif',
       fontSize: '28px',
       color: '#f0dcae',
@@ -386,7 +389,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.tipText = this.add.text(
       this.spritesReady() ? 640 : 40,
       tipY - 9,
-      TIP_WELCOME,
+      this.room.hints.welcome,
       {
         fontFamily: 'Georgia, serif',
         fontSize: '17px',
@@ -626,9 +629,9 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
     if (!result.moved) {
       if (result.bumped) this.playBump(dir);
-      if (result.attemptedPush && !this.hasShownInvalidPushHint) {
+      if (result.attemptedPush && !this.hasShownInvalidPushHint && this.room.hints.invalidPush) {
         this.hasShownInvalidPushHint = true;
-        this.setTip(TIP_INVALID_PUSH);
+        this.setTip(this.room.hints.invalidPush);
       }
       return;
     }
@@ -665,9 +668,9 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.renderDynamicCells();
     this.refreshHUD();
 
-    if (this.moveCount > 0 && !this.hasShownUndoHint) {
+    if (this.moveCount > 0 && !this.hasShownUndoHint && this.room.hints.firstUndo) {
       this.hasShownUndoHint = true;
-      this.setTip(TIP_FIRST_UNDO);
+      this.setTip(this.room.hints.firstUndo);
     }
   }
 
@@ -872,12 +875,19 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.tweens.add({ targets: niloPortrait, alpha: 0.95, duration: 260, delay: 140 });
     this.tweens.add({ targets: bramPortrait, alpha: 0.95, duration: 260, delay: 240 });
 
-    const niloLine = this.add.text(640, 335, '"It stayed."', {
+    // Room-specific subtitle beneath the generic "PUZZLE SOLVED!" banner.
+    const subtitle = this.add.text(640, 268, this.room.success.title, {
+      fontFamily: 'Georgia, serif', fontSize: '22px',
+      color: '#5a3818', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(depth + 3).setAlpha(0);
+    this.tweens.add({ targets: subtitle, alpha: 1, duration: 280, delay: 160 });
+
+    const niloLine = this.add.text(640, 335, this.room.success.niloLine, {
       fontFamily: 'Georgia, serif', fontStyle: 'italic',
       fontSize: '24px', color: '#2a1f12'
     }).setOrigin(0.5).setDepth(depth + 3).setAlpha(0);
 
-    const bramLine = this.add.text(640, 395, '"Just enough."', {
+    const bramLine = this.add.text(640, 395, this.room.success.bramLine, {
       fontFamily: 'Georgia, serif', fontStyle: 'italic',
       fontSize: '22px', color: '#3a2a1a'
     }).setOrigin(0.5).setDepth(depth + 3).setAlpha(0);
@@ -914,17 +924,17 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     panel.lineStyle(2, Palette.gold, 0.55);
     panel.strokeRoundedRect(372, 232, 536, 236, 16);
 
-    this.add.text(640, 260, 'The bridge holds.', {
+    this.add.text(640, 260, this.room.success.title, {
       fontFamily: 'Georgia, serif', fontSize: '28px',
       color: '#7a4a18', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(depth + 2);
 
-    this.add.text(640, 312, '"It stayed."   — Nilo', {
+    this.add.text(640, 312, `${this.room.success.niloLine}   — Nilo`, {
       fontFamily: 'Georgia, serif', fontStyle: 'italic',
       fontSize: '22px', color: '#2a1f12'
     }).setOrigin(0.5).setDepth(depth + 2);
 
-    this.add.text(640, 350, '"Just enough."   — Bram', {
+    this.add.text(640, 350, `${this.room.success.bramLine}   — Bram`, {
       fontFamily: 'Georgia, serif', fontStyle: 'italic',
       fontSize: '22px', color: '#2a1f12'
     }).setOrigin(0.5).setDepth(depth + 2);
