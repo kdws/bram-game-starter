@@ -30,6 +30,10 @@ export const GridAssets = {
   CORNER_RIGHT:      'grid_ui_corner_right',
   DIVIDER_LONG:      'grid_ui_divider_long',
   ORNAMENT_CENTER:   'grid_ui_ornament_center',
+  ARROW_UP:          'grid_ui_arrow_up',
+  ARROW_DOWN:        'grid_ui_arrow_down',
+  ARROW_LEFT:        'grid_ui_arrow_left',
+  ARROW_RIGHT:       'grid_ui_arrow_right',
 
   // --- props used as scenic decoration ---
   LAMP_POST:      'grid_prop_lamp_post',

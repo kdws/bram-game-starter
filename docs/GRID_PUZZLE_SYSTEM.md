@@ -123,12 +123,80 @@ the success state.
 - **No lives, no death.** Mistakes are recoverable.
 - **Soft failure.** Bumps animate as a small lean toward the wall
   and back. No score penalty.
-- **Generous hit zones for kids.** All input is keyboard-only at
-  v0.1; touch is future work.
+- **Generous hit zones for kids.** All input is keyboard, touch, or
+  mouse — see Controls below.
 - **One new mechanic per room.** Maps should not stack push
   blocks, sliding tiles, and creatures in the same beginner room.
 - **Optional hard rooms clearly marked.** Use `difficulty: 'optional'`
   on the `PuzzleDef`.
+
+---
+
+## Controls (v0.3 — keyboard + touch)
+
+The scene exposes four parallel input paths. They all route into
+the same `attemptMove(dir) | attemptUndo() | attemptReset()` methods,
+which gate on `busy` (tween in flight) and `successOpen` (panel up)
+so nothing fires during animations.
+
+### Keyboard
+
+| Key | Action |
+|---|---|
+| Arrow keys / WASD | Move Bram one tile in that direction |
+| `U` | Undo |
+| `R` | Reset |
+| `M` | Return to menu |
+
+### On-screen D-pad
+
+Four glowing arrow buttons sit in the right column to the right of
+the grid (centered around `(1090, 380)`). Each is a `60×60` hit zone
+with a sprite arrow (`arrow_*_glow.png`) when assets are loaded, or
+a procedural rounded-square arrow otherwise. Pressing one calls
+`attemptMove(dir)`.
+
+### On-screen Undo / Reset
+
+In the bottom HUD strip: tappable icons using `button_undo.png` and
+`button_reset.png` sprites (procedural fallback if missing). The
+keyboard label (`U` / `R`) floats above each icon as a hint.
+
+### Swipe (grid area)
+
+The grid area `(gridOriginX, gridOriginY, width*TILE, height*TILE)`
+hosts an interactive zone. On `pointerdown` we record the start point;
+on `pointerup` we compute `(dx, dy)`:
+
+- `dist ≤ TAP_MAX_DRAG (14 px)` → treated as a **tap**.
+- `dist ≥ SWIPE_THRESHOLD (30 px)` → **swipe**, dominant axis decides
+  direction.
+- Anything between is ignored (dead zone — prevents accidental
+  micro-drags from firing moves).
+
+The scene-level `pointerup` listener resolves swipes that end just
+outside the grid zone too.
+
+### Tap-to-adjacent (grid area)
+
+A tap (distance ≤ `TAP_MAX_DRAG`) hit-tests the tile under the release
+point. If that tile is one of Bram's 4-neighbors, the inferred
+direction is passed to `attemptMove`. Taps on Bram's tile or on
+non-adjacent tiles are ignored in v0.1 (future v0.2 work: pathfind
+on longer-range taps).
+
+### Gating
+
+All four input paths share the same gates inside `attemptMove`:
+
+```ts
+if (this.busy || this.successOpen) return;
+```
+
+No move can fire while the 180 ms Bram-tween or the 80 ms wall-bump
+yoyo is in flight. Multiple rapid arrow taps cleanly queue at zero,
+i.e. they're dropped — by design, to keep child playtests
+predictable.
 
 ---
 

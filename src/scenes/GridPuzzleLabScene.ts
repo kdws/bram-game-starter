@@ -22,6 +22,10 @@ const SC_STONE   = 44 / 212;
 const SC_BLOCK   = 46 / 226;
 const SC_EXIT    = 75 / 188;
 
+// Touch input thresholds (CSS pixels)
+const TAP_MAX_DRAG    = 14; // ≤ this counts as a tap
+const SWIPE_THRESHOLD = 30; // ≥ this commits a swipe move
+
 const BROKEN_BRIDGE_MAP = `
 ##############
 #B...........#
@@ -61,6 +65,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   private hasShownInvalidPushHint = false;
   private hasShownUndoHint = false;
   private moveCount = 0;
+  private pointerStart: { x: number; y: number } | null = null;
 
   constructor() { super('GridPuzzleLabScene'); }
 
@@ -98,6 +103,8 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.bram.setFacing(this.engine.bramFacing);
 
     this.bindKeys();
+    this.bindPointerInput();
+    this.buildTouchControls();
     this.refreshHUD();
   }
 
@@ -409,29 +416,64 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       color: '#f0dcae'
     }).setDepth(15);
 
-    // Undo / Reset icon buttons (decorative — keyboard shortcuts still primary)
+    // Undo / Reset: tappable icon buttons (also bound to U / R keys).
     if (this.spritesReady()) {
-      const iconScale = 0.48;
-      this.add.image(1148, 652, GridAssets.BTN_UNDO)
-        .setScale(iconScale).setDepth(15).setAlpha(0.9);
-      this.add.text(1168, 637, 'U', {
-        fontFamily: 'Georgia, serif', fontSize: '12px', color: '#ffe9ad'
-      }).setDepth(16).setAlpha(0.7);
+      this.makeIconButton(1148, 652, GridAssets.BTN_UNDO, 0.48, 'U', () => this.attemptUndo());
+      this.makeIconButton(1204, 652, GridAssets.BTN_RESET, 0.48, 'R', () => this.attemptReset());
 
-      this.add.image(1204, 652, GridAssets.BTN_RESET)
-        .setScale(iconScale).setDepth(15).setAlpha(0.9);
-      this.add.text(1224, 637, 'R', {
-        fontFamily: 'Georgia, serif', fontSize: '12px', color: '#ffe9ad'
-      }).setDepth(16).setAlpha(0.7);
-
-      this.add.text(1240, 666, 'Arrows / WASD  ·  M menu', {
-        fontFamily: 'Georgia, serif', fontSize: '14px', color: '#a08866'
+      this.add.text(1240, 666, 'Keys, swipe, or tap', {
+        fontFamily: 'Georgia, serif', fontSize: '13px', color: '#a08866'
       }).setOrigin(1, 0).setDepth(15);
     } else {
-      this.add.text(1240, 642, 'Arrows / WASD  ·  U undo  ·  R reset  ·  M menu', {
-        fontFamily: 'Georgia, serif', fontSize: '15px', color: '#a08866'
+      // Procedural fallback Undo / Reset
+      this.makeProceduralIconButton(1148, 652, '↶', 'U', () => this.attemptUndo());
+      this.makeProceduralIconButton(1204, 652, '⟲', 'R', () => this.attemptReset());
+
+      this.add.text(1240, 642, 'Keyboard / Swipe / Tap  ·  M menu', {
+        fontFamily: 'Georgia, serif', fontSize: '14px', color: '#a08866'
       }).setOrigin(1, 0).setDepth(15);
     }
+  }
+
+  private makeIconButton(
+    cx: number, cy: number, spriteKey: string, scale: number,
+    keyLabel: string, onTap: () => void
+  ) {
+    const img = this.add.image(cx, cy, spriteKey)
+      .setScale(scale).setDepth(15).setAlpha(0.9);
+    this.add.text(cx + 20, cy - 15, keyLabel, {
+      fontFamily: 'Georgia, serif', fontSize: '12px', color: '#ffe9ad'
+    }).setDepth(16).setAlpha(0.7);
+
+    const hit = this.add.zone(cx, cy, 56, 56)
+      .setInteractive({ useHandCursor: true }).setDepth(17);
+    hit.on('pointerover', () => img.setScale(scale * 1.08).setAlpha(1));
+    hit.on('pointerout',  () => img.setScale(scale).setAlpha(0.9));
+    hit.on('pointerdown', onTap);
+  }
+
+  private makeProceduralIconButton(
+    cx: number, cy: number, glyph: string, keyLabel: string, onTap: () => void
+  ) {
+    const size = 48;
+    const g = this.add.graphics().setDepth(15);
+    g.fillStyle(Palette.bark, 0.9);
+    g.lineStyle(2, Palette.gold, 0.85);
+    g.fillRoundedRect(cx - size / 2, cy - size / 2, size, size, 8);
+    g.strokeRoundedRect(cx - size / 2, cy - size / 2, size, size, 8);
+
+    const text = this.add.text(cx, cy, glyph, {
+      fontFamily: 'Georgia, serif', fontSize: '24px', color: '#ffe9ad'
+    }).setOrigin(0.5).setDepth(16);
+    this.add.text(cx + 20, cy - 15, keyLabel, {
+      fontFamily: 'Georgia, serif', fontSize: '12px', color: '#ffe9ad'
+    }).setDepth(16).setAlpha(0.7);
+
+    const hit = this.add.zone(cx, cy, size, size)
+      .setInteractive({ useHandCursor: true }).setDepth(17);
+    hit.on('pointerover', () => text.setScale(1.1));
+    hit.on('pointerout',  () => text.setScale(1));
+    hit.on('pointerdown', onTap);
   }
 
   // ─── input ────────────────────────────────────────────────────────────────
@@ -450,6 +492,131 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     kb.on('keydown-U',     () => this.attemptUndo());
     kb.on('keydown-R',     () => this.attemptReset());
     kb.on('keydown-M',     () => this.scene.start('MenuScene'));
+  }
+
+  /**
+   * On-screen directional pad placed to the right of the grid. Uses arrow
+   * glow sprites if loaded; falls back to procedural arrow buttons.
+   */
+  private buildTouchControls() {
+    const cx = 1090;            // center column to the right of the grid
+    const cy = 380;             // vertically centered with grid
+    const r  = 64;              // distance from center for each arrow
+
+    this.makeDirButton(cx,     cy - r, 'up',    GridAssets.ARROW_UP);
+    this.makeDirButton(cx,     cy + r, 'down',  GridAssets.ARROW_DOWN);
+    this.makeDirButton(cx - r, cy,     'left',  GridAssets.ARROW_LEFT);
+    this.makeDirButton(cx + r, cy,     'right', GridAssets.ARROW_RIGHT);
+  }
+
+  private makeDirButton(x: number, y: number, dir: Direction, spriteKey: string) {
+    const useSprite = this.spritesReady() && this.textures.exists(spriteKey);
+    const baseScale = 0.5;
+
+    let visual: Phaser.GameObjects.Image | null = null;
+    if (useSprite) {
+      visual = this.add.image(x, y, spriteKey)
+        .setScale(baseScale).setDepth(15).setAlpha(0.92);
+    } else {
+      this.drawProceduralArrow(x, y, dir);
+    }
+
+    const hit = this.add.zone(x, y, 60, 60)
+      .setInteractive({ useHandCursor: true }).setDepth(17);
+    hit.on('pointerover', () => visual?.setScale(baseScale * 1.08).setAlpha(1));
+    hit.on('pointerout',  () => visual?.setScale(baseScale).setAlpha(0.92));
+    hit.on('pointerdown', () => {
+      // Quick press-tween for tactile feedback (sprite path only).
+      if (visual) {
+        this.tweens.add({
+          targets: visual, scale: baseScale * 0.92,
+          duration: 60, yoyo: true, ease: 'Sine.easeOut'
+        });
+      }
+      this.attemptMove(dir);
+    });
+  }
+
+  private drawProceduralArrow(cx: number, cy: number, dir: Direction) {
+    const size = 56;
+    const g = this.add.graphics().setDepth(15);
+    g.fillStyle(Palette.bark, 0.92);
+    g.lineStyle(2, Palette.gold, 0.9);
+    g.fillRoundedRect(cx - size / 2, cy - size / 2, size, size, 10);
+    g.strokeRoundedRect(cx - size / 2, cy - size / 2, size, size, 10);
+    // Filled triangle
+    g.fillStyle(0xffe9ad, 0.95);
+    const h = 12;
+    if (dir === 'up')    g.fillTriangle(cx, cy - h, cx - h, cy + h, cx + h, cy + h);
+    if (dir === 'down')  g.fillTriangle(cx, cy + h, cx - h, cy - h, cx + h, cy - h);
+    if (dir === 'left')  g.fillTriangle(cx - h, cy, cx + h, cy - h, cx + h, cy + h);
+    if (dir === 'right') g.fillTriangle(cx + h, cy, cx - h, cy - h, cx - h, cy + h);
+  }
+
+  /**
+   * Pointer input scoped to the grid area:
+   *  - Drag > SWIPE_THRESHOLD: swipe-direction move.
+   *  - Drag ≤ TAP_MAX_DRAG: tap-to-adjacent (only if target tile is
+   *    one of Bram's 4-neighbors).
+   *  - Anything in between is ignored.
+   */
+  private bindPointerInput() {
+    const w = this.engine.width * TILE;
+    const h = this.engine.height * TILE;
+    const swipeZone = this.add.zone(this.gridOriginX, this.gridOriginY, w, h)
+      .setOrigin(0, 0)
+      .setInteractive();
+    // No depth set — zones are non-rendering, just receive input.
+
+    swipeZone.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.busy || this.successOpen) return;
+      this.pointerStart = { x: p.x, y: p.y };
+    });
+
+    // Listen on the scene input for pointerup so a swipe that ends just
+    // outside the zone still resolves cleanly.
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (!this.pointerStart) return;
+      const start = this.pointerStart;
+      this.pointerStart = null;
+      if (this.busy || this.successOpen) return;
+
+      const dx   = p.x - start.x;
+      const dy   = p.y - start.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist <= TAP_MAX_DRAG) {
+        // Treat as tap-to-adjacent (uses release point — that's where
+        // the player's finger is when they commit).
+        this.handleTapToAdjacent(p.x, p.y);
+        return;
+      }
+
+      if (dist < SWIPE_THRESHOLD) return; // dead zone between tap and swipe
+
+      // Swipe — dominant axis wins
+      if (Math.abs(dx) > Math.abs(dy)) {
+        this.attemptMove(dx > 0 ? 'right' : 'left');
+      } else {
+        this.attemptMove(dy > 0 ? 'down' : 'up');
+      }
+    });
+  }
+
+  private handleTapToAdjacent(px: number, py: number) {
+    const gx = Math.floor((px - this.gridOriginX) / TILE);
+    const gy = Math.floor((py - this.gridOriginY) / TILE);
+    if (gx < 0 || gx >= this.engine.width)  return;
+    if (gy < 0 || gy >= this.engine.height) return;
+
+    const bx = this.engine.bram.x;
+    const by = this.engine.bram.y;
+
+    if (gx === bx + 1 && gy === by)      this.attemptMove('right');
+    else if (gx === bx - 1 && gy === by) this.attemptMove('left');
+    else if (gx === bx && gy === by + 1) this.attemptMove('down');
+    else if (gx === bx && gy === by - 1) this.attemptMove('up');
+    // Tap on Bram's tile or non-adjacent tile: ignored in v0.1
   }
 
   private attemptMove(dir: Direction) {

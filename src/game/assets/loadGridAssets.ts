@@ -36,6 +36,10 @@ export function loadGridAssets(scene: Phaser.Scene): void {
   scene.load.image(GridAssets.CORNER_RIGHT,    U + 'corner_ornament_right.png');
   scene.load.image(GridAssets.DIVIDER_LONG,    U + 'divider_long.png');
   scene.load.image(GridAssets.ORNAMENT_CENTER, U + 'ornament_line_center.png');
+  scene.load.image(GridAssets.ARROW_UP,        U + 'arrow_up_glow.png');
+  scene.load.image(GridAssets.ARROW_DOWN,      U + 'arrow_down_glow.png');
+  scene.load.image(GridAssets.ARROW_LEFT,      U + 'arrow_left_glow.png');
+  scene.load.image(GridAssets.ARROW_RIGHT,     U + 'arrow_right_glow.png');
 
   // props used as scenic decoration
   scene.load.image(GridAssets.LAMP_POST,     P + 'lamp_post.png');
