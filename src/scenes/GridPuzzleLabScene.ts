@@ -85,6 +85,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     // Static floor/wall sprite layer — built once, never changes
     if (this.spritesReady()) {
       this.buildStaticSpriteLayer();
+      this.buildSceneryLayer();
     }
 
     // Initial dynamic cells (stones, sockets, push block, exit)
@@ -104,6 +105,61 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
   private spritesReady(): boolean {
     return this.textures.exists(GridAssets.WALL);
+  }
+
+  /**
+   * Place a handful of decorative plants/mushrooms on floor tiles that
+   * aren't gameplay-critical, plus two lamp posts framing the grid.
+   * Deterministic placement (no `Math.random`) so the scene looks the
+   * same across resets.
+   */
+  private buildSceneryLayer() {
+    // Floor tiles that should stay clear: every cell adjacent to gameplay
+    // elements (stones/sockets/push block/exit) plus Bram's start tile.
+    const reserved = new Set<string>();
+    const key = (x: number, y: number) => `${x},${y}`;
+    reserved.add(key(this.engine.bram.x, this.engine.bram.y));
+    for (let y = 0; y < this.engine.height; y++) {
+      for (let x = 0; x < this.engine.width; x++) {
+        const c = this.engine.getCell(x, y);
+        if (c !== 'floor') {
+          // also reserve neighbors so we don't crowd pickups
+          for (const [dx, dy] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]) {
+            reserved.add(key(x + dx, y + dy));
+          }
+        }
+      }
+    }
+
+    // Hand-picked deterministic placements that read well across the map.
+    // (gx, gy, key, scale, offsetX, offsetY)
+    const placements: Array<[number, number, string, number, number, number]> = [
+      [2,  3, GridAssets.DECO_FLOWER_BLUE,   0.28,  0,  6],
+      [11, 3, GridAssets.DECO_PLANT_FERN,    0.32, -2,  8],
+      [3,  5, GridAssets.DECO_PLANT_SPROUT,  0.34,  4,  4],
+      [10, 5, GridAssets.DECO_MUSHROOM_PAIR, 0.40,  0,  6],
+      [11, 7, GridAssets.DECO_FLOWER_PURPLE, 0.28, -3,  6],
+      [3,  7, GridAssets.DECO_PLANT_TUFT,    0.38,  2,  4],
+      [11, 1, GridAssets.DECO_ROCK_SMALL,    0.40, -4,  6],
+      [2,  1, GridAssets.DECO_MUSHROOM_TALL, 0.34,  2,  4],
+    ];
+    for (const [gx, gy, k, sc, ox, oy] of placements) {
+      if (reserved.has(key(gx, gy))) continue;
+      const { x: cx, y: cy } = this.tileToWorld(gx, gy);
+      this.add.image(cx + ox, cy + oy, k)
+        .setScale(sc)
+        .setDepth(2) // above floor, below dynamic cells
+        .setAlpha(0.92);
+    }
+
+    // Lamp posts framing the grid (sit just outside the play area).
+    const lampLeftX  = this.gridOriginX - 36;
+    const lampRightX = this.gridOriginX + this.engine.width * TILE + 36;
+    const lampY      = this.gridOriginY + 30;
+    this.add.image(lampLeftX,  lampY, GridAssets.LAMP_POST)
+      .setScale(0.34).setDepth(2);
+    this.add.image(lampRightX, lampY, GridAssets.LAMP_POST)
+      .setScale(0.34).setFlipX(true).setDepth(2);
   }
 
   private buildStaticSpriteLayer() {
@@ -310,24 +366,24 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       shadow: { offsetX: 1, offsetY: 1, color: '#000', blur: 3, fill: true }
     }).setDepth(15);
 
-    // Tip banner: sprite bg if loaded, else bare text
-    const tipY = 65;
+    // Tip strip: use the clean panel_wide parchment (tip_banner has baked
+    // text we don't want).
+    const tipY = 75;
     if (this.spritesReady()) {
-      // tip_banner is 394×83, display at half height to fit the bar
-      this.tipBannerImg = this.add.image(640, tipY + 8, GridAssets.TIP_BANNER)
-        .setDisplaySize(900, 46)
+      this.tipBannerImg = this.add.image(640, tipY, GridAssets.PANEL_WIDE)
+        .setDisplaySize(940, 60)
         .setAlpha(0.92)
         .setDepth(14);
     }
 
     this.tipText = this.add.text(
       this.spritesReady() ? 640 : 40,
-      tipY,
+      tipY - 9,
       TIP_WELCOME,
       {
         fontFamily: 'Georgia, serif',
-        fontSize: '16px',
-        color: this.spritesReady() ? '#5a2e0a' : '#f0dcae',
+        fontSize: '17px',
+        color: this.spritesReady() ? '#3a2410' : '#f0dcae',
         wordWrap: { width: 820 },
         shadow: this.spritesReady()
           ? undefined
@@ -496,6 +552,19 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       duration: 80, yoyo: true, ease: 'Sine.easeOut',
       onComplete: () => { this.busy = false; this.bram.setPosition(startX, startY); }
     });
+
+    // Puff of dust at the point of impact.
+    if (this.spritesReady()) {
+      const dustX = startX + (dir === 'left' ? -TILE / 2 : dir === 'right' ? TILE / 2 : 0);
+      const dustY = startY + (dir === 'up'   ? -TILE / 2 : dir === 'down'  ? TILE / 2 : 0) + 6;
+      const dust = this.add.image(dustX, dustY, GridAssets.VFX_BUMP_DUST)
+        .setScale(0.22).setDepth(20).setAlpha(0.85);
+      this.tweens.add({
+        targets: dust, scale: 0.36, alpha: 0,
+        duration: 380, ease: 'Quad.easeOut',
+        onComplete: () => dust.destroy()
+      });
+    }
   }
 
   private spawnPickupSparkle(x: number, y: number) {
@@ -557,6 +626,20 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.successOpen = true;
     this.bram.celebrate();
 
+    // Gold halo under Bram's feet for the celebration.
+    if (this.spritesReady()) {
+      const halo = this.add.image(this.bram.x, this.bram.y + 24, GridAssets.VFX_GOLD_HALO)
+        .setScale(0.30).setDepth(9).setAlpha(0);
+      this.tweens.add({
+        targets: halo, alpha: 0.95, scale: 0.45,
+        duration: 600, ease: 'Quad.easeOut'
+      });
+      this.tweens.add({
+        targets: halo, angle: 360,
+        duration: 6000, repeat: -1, ease: 'Linear'
+      });
+    }
+
     const depth = 1000;
     const dim = this.add.graphics().setDepth(depth);
     dim.fillStyle(0x000000, 0.55).fillRect(0, 0, 1280, 720);
@@ -600,37 +683,59 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   }
 
   private showSuccessSprite(depth: number) {
-    // Parchment panel (panel_medium: 286×295) scaled to 480×495
-    const panel = this.add.image(640, 345, GridAssets.PANEL_MEDIUM)
-      .setDisplaySize(500, 515).setDepth(depth + 1);
+    // Parchment panel (panel_medium: 286×295) scaled to 540×555
+    const panel = this.add.image(640, 360, GridAssets.PANEL_MEDIUM)
+      .setDisplaySize(540, 555).setDepth(depth + 1);
     panel.setAlpha(0);
     this.tweens.add({ targets: panel, alpha: 1, duration: 280, ease: 'Quad.easeOut' });
 
     // "PUZZLE SOLVED!" banner (479×211) scaled to fit
-    const banner = this.add.image(640, 210, GridAssets.SOLVED_BANNER)
+    const banner = this.add.image(640, 195, GridAssets.SOLVED_BANNER)
       .setDisplaySize(580, 255).setDepth(depth + 2);
     banner.setAlpha(0);
     this.tweens.add({ targets: banner, alpha: 1, duration: 300, delay: 80, ease: 'Back.easeOut' });
 
-    // Nilo portrait in corner
-    const portrait = this.add.image(432, 330, GridAssets.PORTRAIT_NILO)
-      .setDisplaySize(110, 77).setDepth(depth + 3).setAlpha(0);
-    this.tweens.add({ targets: portrait, alpha: 0.92, duration: 260, delay: 120 });
+    // Nilo + Bram portraits flanking the dialogue lines.
+    const niloPortrait = this.add.image(450, 350, GridAssets.PORTRAIT_NILO)
+      .setDisplaySize(140, 98).setDepth(depth + 3).setAlpha(0);
+    const bramPortrait = this.add.image(830, 410, GridAssets.PORTRAIT_BRAM)
+      .setScale(0)
+      .setDepth(depth + 3).setAlpha(0);
+    bramPortrait.setDisplaySize(140, 98).setFlipX(true);
+    this.tweens.add({ targets: niloPortrait, alpha: 0.95, duration: 260, delay: 140 });
+    this.tweens.add({ targets: bramPortrait, alpha: 0.95, duration: 260, delay: 240 });
 
-    const niloLine = this.add.text(640, 320, '"It stayed."', {
+    const niloLine = this.add.text(640, 335, '"It stayed."', {
       fontFamily: 'Georgia, serif', fontStyle: 'italic',
-      fontSize: '22px', color: '#2a1f12'
+      fontSize: '24px', color: '#2a1f12'
     }).setOrigin(0.5).setDepth(depth + 3).setAlpha(0);
 
-    const bramLine = this.add.text(640, 360, '"Just enough."  — Bram', {
+    const bramLine = this.add.text(640, 395, '"Just enough."', {
       fontFamily: 'Georgia, serif', fontStyle: 'italic',
-      fontSize: '20px', color: '#3a2a1a'
+      fontSize: '22px', color: '#3a2a1a'
     }).setOrigin(0.5).setDepth(depth + 3).setAlpha(0);
 
-    this.tweens.add({ targets: [niloLine, bramLine], alpha: 1, duration: 300, delay: 200 });
+    this.tweens.add({ targets: [niloLine, bramLine], alpha: 1, duration: 300, delay: 220 });
 
-    this.makeButton(480, 408, 320, 50, 'Return to menu', depth + 3, () => this.scene.start('MenuScene'));
-    void [panel, banner, portrait];
+    // Sprite back button: real button image + label, hand cursor on hover.
+    this.makeSpriteButton(640, 510, 'Return to menu', depth + 4, () => this.scene.start('MenuScene'));
+    void [panel, banner, niloPortrait, bramPortrait];
+  }
+
+  private makeSpriteButton(
+    cx: number, cy: number, label: string, depth: number, onClick: () => void
+  ) {
+    const btn = this.add.image(cx - 110, cy, GridAssets.BTN_BACK)
+      .setScale(0.6).setDepth(depth);
+    const text = this.add.text(cx + 8, cy, label, {
+      fontFamily: 'Georgia, serif', fontSize: '22px',
+      color: '#2a1f12', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(depth);
+    const hit = this.add.zone(cx, cy, 280, 60)
+      .setInteractive({ useHandCursor: true }).setDepth(depth);
+    hit.on('pointerover', () => { btn.setScale(0.66); text.setScale(1.04); });
+    hit.on('pointerout',  () => { btn.setScale(0.6);  text.setScale(1);    });
+    hit.on('pointerdown', onClick);
   }
 
   private showSuccessProcedural(depth: number) {

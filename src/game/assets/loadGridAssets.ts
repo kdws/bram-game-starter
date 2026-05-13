@@ -23,14 +23,33 @@ export function loadGridAssets(scene: Phaser.Scene): void {
   // ui
   scene.load.image(GridAssets.TIP_BANNER,    U + 'tip_banner.png');
   scene.load.image(GridAssets.PANEL_MEDIUM,  U + 'panel_medium.png');
+  scene.load.image(GridAssets.PANEL_WIDE,    U + 'panel_wide.png');
   scene.load.image(GridAssets.SOLVED_BANNER, U + 'banner_puzzle_solved.png');
   scene.load.image(GridAssets.BTN_UNDO,      U + 'button_undo.png');
   scene.load.image(GridAssets.BTN_RESET,     U + 'button_reset.png');
+  scene.load.image(GridAssets.BTN_BACK,      U + 'button_back.png');
   scene.load.image(GridAssets.PORTRAIT_NILO, U + 'portrait_nilo.png');
+  scene.load.image(GridAssets.PORTRAIT_BRAM, U + 'portrait_bram.png');
+
+  // props used as scenic decoration
+  scene.load.image(GridAssets.LAMP_POST,     P + 'lamp_post.png');
+
+  // tile decorations (in tilesets/rattlewood_grid/)
+  scene.load.image(GridAssets.DECO_FLOWER_BLUE,   T + 'flower_blue_cluster.png');
+  scene.load.image(GridAssets.DECO_FLOWER_PURPLE, T + 'flower_purple_cluster.png');
+  scene.load.image(GridAssets.DECO_MUSHROOM_PAIR, T + 'mushroom_pair.png');
+  scene.load.image(GridAssets.DECO_MUSHROOM_TALL, T + 'mushroom_tall.png');
+  scene.load.image(GridAssets.DECO_PLANT_FERN,    T + 'plant_fern_a.png');
+  scene.load.image(GridAssets.DECO_PLANT_SPROUT,  T + 'plant_sprout.png');
+  scene.load.image(GridAssets.DECO_PLANT_TUFT,    T + 'plant_small_tuft.png');
+  scene.load.image(GridAssets.DECO_ROCK_SMALL,    T + 'rock_small.png');
 
   // vfx
   scene.load.image(GridAssets.VFX_BLUE_PICKUP,  V + 'blue_pickup_sparkles.png');
   scene.load.image(GridAssets.VFX_BLUE_BURST,   V + 'blue_repair_burst.png');
+  scene.load.image(GridAssets.VFX_BLUE_MOTES,   V + 'blue_energy_motes.png');
   scene.load.image(GridAssets.VFX_GOLD_VICTORY, V + 'gold_victory_sparkles.png');
   scene.load.image(GridAssets.VFX_GOLD_SHOWER,  V + 'gold_star_shower.png');
+  scene.load.image(GridAssets.VFX_GOLD_HALO,    V + 'gold_halo_ring.png');
+  scene.load.image(GridAssets.VFX_BUMP_DUST,    V + 'dust_bump_invalid.png');
 }
