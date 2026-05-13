@@ -21,15 +21,21 @@ export function loadGridAssets(scene: Phaser.Scene): void {
   scene.load.image(GridAssets.PUSH_BLOCK,    P + 'push_block_stone.png');
 
   // ui
-  scene.load.image(GridAssets.TIP_BANNER,    U + 'tip_banner.png');
-  scene.load.image(GridAssets.PANEL_MEDIUM,  U + 'panel_medium.png');
-  scene.load.image(GridAssets.PANEL_WIDE,    U + 'panel_wide.png');
-  scene.load.image(GridAssets.SOLVED_BANNER, U + 'banner_puzzle_solved.png');
-  scene.load.image(GridAssets.BTN_UNDO,      U + 'button_undo.png');
-  scene.load.image(GridAssets.BTN_RESET,     U + 'button_reset.png');
-  scene.load.image(GridAssets.BTN_BACK,      U + 'button_back.png');
-  scene.load.image(GridAssets.PORTRAIT_NILO, U + 'portrait_nilo.png');
-  scene.load.image(GridAssets.PORTRAIT_BRAM, U + 'portrait_bram.png');
+  scene.load.image(GridAssets.TIP_BANNER,      U + 'tip_banner.png');
+  scene.load.image(GridAssets.PANEL_SMALL,     U + 'panel_small.png');
+  scene.load.image(GridAssets.PANEL_MEDIUM,    U + 'panel_medium.png');
+  scene.load.image(GridAssets.PANEL_WIDE,      U + 'panel_wide.png');
+  scene.load.image(GridAssets.SOLVED_BANNER,   U + 'banner_puzzle_solved.png');
+  scene.load.image(GridAssets.BTN_UNDO,        U + 'button_undo.png');
+  scene.load.image(GridAssets.BTN_RESET,       U + 'button_reset.png');
+  scene.load.image(GridAssets.BTN_BACK,        U + 'button_back.png');
+  scene.load.image(GridAssets.PORTRAIT_NILO,   U + 'portrait_nilo.png');
+  scene.load.image(GridAssets.PORTRAIT_BRAM,   U + 'portrait_bram.png');
+  scene.load.image(GridAssets.PORTRAIT_OWL,    U + 'portrait_owl.png');
+  scene.load.image(GridAssets.CORNER_LEFT,     U + 'corner_ornament_left.png');
+  scene.load.image(GridAssets.CORNER_RIGHT,    U + 'corner_ornament_right.png');
+  scene.load.image(GridAssets.DIVIDER_LONG,    U + 'divider_long.png');
+  scene.load.image(GridAssets.ORNAMENT_CENTER, U + 'ornament_line_center.png');
 
   // props used as scenic decoration
   scene.load.image(GridAssets.LAMP_POST,     P + 'lamp_post.png');

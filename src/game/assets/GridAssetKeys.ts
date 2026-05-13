@@ -14,16 +14,22 @@ export const GridAssets = {
   REPAIR_STONE:   'grid_repair_stone',
   PUSH_BLOCK:     'grid_push_block',
 
-  // --- ui (ui/grid/) ---
-  TIP_BANNER:     'grid_ui_tip_banner',       // (has baked text — kept but unused)
-  PANEL_MEDIUM:   'grid_ui_panel_medium',
-  PANEL_WIDE:     'grid_ui_panel_wide',       // clean parchment strip for tip bar
-  SOLVED_BANNER:  'grid_ui_solved_banner',
-  BTN_UNDO:       'grid_ui_btn_undo',
-  BTN_RESET:      'grid_ui_btn_reset',
-  BTN_BACK:       'grid_ui_btn_back',
-  PORTRAIT_NILO:  'grid_ui_portrait_nilo',
-  PORTRAIT_BRAM:  'grid_ui_portrait_bram',
+  // --- ui (ui/grid/) — shared across scenes despite the "grid" namespace ---
+  TIP_BANNER:        'grid_ui_tip_banner',       // (has baked text — kept but unused)
+  PANEL_SMALL:       'grid_ui_panel_small',
+  PANEL_MEDIUM:      'grid_ui_panel_medium',
+  PANEL_WIDE:        'grid_ui_panel_wide',       // clean parchment strip for tip bar
+  SOLVED_BANNER:     'grid_ui_solved_banner',
+  BTN_UNDO:          'grid_ui_btn_undo',
+  BTN_RESET:         'grid_ui_btn_reset',
+  BTN_BACK:          'grid_ui_btn_back',
+  PORTRAIT_NILO:     'grid_ui_portrait_nilo',
+  PORTRAIT_BRAM:     'grid_ui_portrait_bram',
+  PORTRAIT_OWL:      'grid_ui_portrait_owl',
+  CORNER_LEFT:       'grid_ui_corner_left',      // gold filigree corner
+  CORNER_RIGHT:      'grid_ui_corner_right',
+  DIVIDER_LONG:      'grid_ui_divider_long',
+  ORNAMENT_CENTER:   'grid_ui_ornament_center',
 
   // --- props used as scenic decoration ---
   LAMP_POST:      'grid_prop_lamp_post',
