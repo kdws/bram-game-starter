@@ -5,6 +5,8 @@ import { chapters } from '../data/progression';
 import { RestorationProgressStrip } from '../game/ui/RestorationProgressStrip';
 import { GameProgress } from '../game/progress/GameProgress';
 import { GridAssets } from '../game/assets/GridAssetKeys';
+import { AudioManager } from '../game/audio/AudioManager';
+import { AudioKeys } from '../game/audio/AudioKeys';
 
 export class MenuScene extends Phaser.Scene {
   constructor() { super('MenuScene'); }
@@ -85,6 +87,59 @@ export class MenuScene extends Phaser.Scene {
     });
 
     addSmallText(this, 'Keyboard: arrows/WASD to move, space to jump/select. Touch/mouse buttons work in menus.', 78, 706, 14);
+
+    this.addMuteToggle();
+  }
+
+  /**
+   * Small speaker icon in the top-right that toggles AudioManager mute.
+   * State persists via localStorage.
+   */
+  private addMuteToggle() {
+    const cx = 1208;
+    const cy = 72;
+    const r  = 22;
+
+    const g = this.add.graphics().setDepth(20);
+    const label = this.add.text(cx + r + 10, cy, '', {
+      fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f0dcae'
+    }).setOrigin(0, 0.5).setDepth(20);
+
+    const redraw = () => {
+      g.clear();
+      g.fillStyle(Palette.bark, 0.85);
+      g.lineStyle(2, Palette.gold, 0.9);
+      g.fillCircle(cx, cy, r);
+      g.strokeCircle(cx, cy, r);
+      // Speaker triangle/body
+      g.fillStyle(0xffe9ad, 1);
+      g.fillRect(cx - 10, cy - 4, 5, 8);
+      g.fillTriangle(cx - 5, cy - 8, cx - 5, cy + 8, cx + 4, cy);
+      if (AudioManager.isMuted()) {
+        // red "muted" slash
+        g.lineStyle(3, 0xff6a5a, 1);
+        g.lineBetween(cx - 12, cy - 12, cx + 12, cy + 12);
+        label.setText('muted');
+      } else {
+        // two small arcs to show sound waves
+        g.lineStyle(2, 0xffe9ad, 1);
+        g.beginPath(); g.arc(cx + 4, cy, 8, -Math.PI / 3, Math.PI / 3); g.strokePath();
+        g.beginPath(); g.arc(cx + 4, cy, 12, -Math.PI / 4, Math.PI / 4); g.strokePath();
+        label.setText('');
+      }
+    };
+    redraw();
+
+    const hit = this.add.zone(cx, cy, r * 2 + 4, r * 2 + 4)
+      .setInteractive({ useHandCursor: true }).setDepth(21);
+    hit.on('pointerover', () => g.setAlpha(0.85));
+    hit.on('pointerout',  () => g.setAlpha(1));
+    hit.on('pointerdown', () => {
+      AudioManager.toggleMute();
+      redraw();
+      // Click sound only fires if NOT muted (manager guards it)
+      AudioManager.play(AudioKeys.UI_CLICK);
+    });
   }
 
   // ─── ornament helpers ────────────────────────────────────────────────────

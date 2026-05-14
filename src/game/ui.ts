@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { Palette } from './palette';
+import { AudioManager } from './audio/AudioManager';
+import { AudioKeys } from './audio/AudioKeys';
 
 export function addPanel(scene: Phaser.Scene, x: number, y: number, w: number, h: number, alpha = 0.92) {
   const g = scene.add.graphics();
@@ -42,9 +44,9 @@ export function addButton(scene: Phaser.Scene, label: string, x: number, y: numb
     color: '#ffe9ad'
   }).setOrigin(0.5);
   const hit = scene.add.zone(x + w / 2, y + h / 2, w, h).setInteractive({ useHandCursor: true });
-  hit.on('pointerover', () => text.setScale(1.04));
-  hit.on('pointerout', () => text.setScale(1));
-  hit.on('pointerdown', onClick);
+  hit.on('pointerover', () => { text.setScale(1.04); AudioManager.play(AudioKeys.UI_HOVER); });
+  hit.on('pointerout',  () => text.setScale(1));
+  hit.on('pointerdown', () => { AudioManager.play(AudioKeys.UI_CLICK); onClick(); });
   group.addMultiple([bg, text, hit]);
   return group;
 }

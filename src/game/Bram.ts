@@ -6,6 +6,8 @@ import {
   BRAM_SKELETON_IDLE_FRAME,
   bramSkeletonReady
 } from './sprites/bramSkeletonAtlas';
+import { AudioManager } from './audio/AudioManager';
+import { AudioKeys } from './audio/AudioKeys';
 
 // The procedural Bram was drawn at ~80px tall at scale 1.0. The v0.2 atlas
 // sprite is 192×192 with ~120-150px of visible character. Multiplying by this
@@ -241,6 +243,7 @@ export class Bram extends Phaser.GameObjects.Container {
   }
 
   fallApart() {
+    AudioManager.play(AudioKeys.BRAM_FALL_APART);
     if (this.sprite) {
       this.playFallApartChain();
       return;
@@ -267,6 +270,7 @@ export class Bram extends Phaser.GameObjects.Container {
     sprite.play('bram_skeleton_fall_apart');
     sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       if (this.scene.anims.exists('bram_skeleton_reassemble')) {
+        AudioManager.play(AudioKeys.BRAM_REASSEMBLE);
         sprite.play('bram_skeleton_reassemble');
         sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
           this.busyAnim = false;
@@ -295,6 +299,10 @@ export class Bram extends Phaser.GameObjects.Container {
         onComplete: () => p.destroy()
       });
     }
-    this.scene.time.delayedCall(700, () => { this.visible = true; this.celebrate(); });
+    this.scene.time.delayedCall(700, () => {
+      this.visible = true;
+      AudioManager.play(AudioKeys.BRAM_REASSEMBLE);
+      this.celebrate();
+    });
   }
 }

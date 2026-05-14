@@ -6,6 +6,8 @@ import { CellType, Direction } from '../game/grid/GridTypes';
 import { addPanel } from '../game/ui';
 import { GridAssets } from '../game/assets/GridAssetKeys';
 import { PUZZLE_ROOMS, DEFAULT_ROOM_ID, PuzzleRoom } from '../data/puzzleRooms';
+import { AudioManager } from '../game/audio/AudioManager';
+import { AudioKeys } from '../game/audio/AudioKeys';
 
 const TILE = 48;
 
@@ -109,6 +111,10 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.bindPointerInput();
     this.buildTouchControls();
     this.refreshHUD();
+
+    // Start cozy ambient pad for puzzle play. Already-running loops are
+    // a no-op inside AudioManager.
+    AudioManager.loop(AudioKeys.AMBIENT_RATTLEWOOD);
   }
 
   // ─── grid sprite layers ───────────────────────────────────────────────────
@@ -494,7 +500,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     kb.on('keydown-S',     () => this.attemptMove('down'));
     kb.on('keydown-U',     () => this.attemptUndo());
     kb.on('keydown-R',     () => this.attemptReset());
-    kb.on('keydown-M',     () => this.scene.start('MenuScene'));
+    kb.on('keydown-M',     () => this.exitToMenu());
   }
 
   /**
@@ -624,11 +630,15 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
   private attemptMove(dir: Direction) {
     if (this.busy || this.successOpen) return;
+    const wasSolvedBefore = this.engine.allSocketsRepaired();
     const result = this.engine.tryMove(dir);
     this.bram.setFacing(this.engine.bramFacing);
 
     if (!result.moved) {
-      if (result.bumped) this.playBump(dir);
+      if (result.bumped) {
+        this.playBump(dir);
+        AudioManager.play(AudioKeys.INVALID_BUMP);
+      }
       if (result.attemptedPush && !this.hasShownInvalidPushHint && this.room.hints.invalidPush) {
         this.hasShownInvalidPushHint = true;
         this.setTip(this.room.hints.invalidPush);
@@ -638,6 +648,17 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
     this.moveCount += 1;
     this.busy = true;
+
+    // Audio cues that should fire on commit (not after tween):
+    if (result.pushedBlock)    AudioManager.play(AudioKeys.BLOCK_PUSH);
+    if (result.collectedStone) AudioManager.play(AudioKeys.PICKUP_STONE);
+    if (result.filledSocket)   AudioManager.play(AudioKeys.REPAIR_SOCKET);
+
+    // "Gate just opened" cue — exit transitioned from closed to open
+    // because this move filled the last socket.
+    if (!wasSolvedBefore && this.engine.allSocketsRepaired()) {
+      AudioManager.play(AudioKeys.PORTAL_OPEN, { volume: 0.85 });
+    }
 
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
     this.renderDynamicCells();
@@ -662,6 +683,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     if (this.busy || this.successOpen) return;
     if (!this.engine.canUndo) return;
     this.engine.undo();
+    AudioManager.play(AudioKeys.UNDO);
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
     this.bram.setPosition(target.x, target.y);
     this.bram.setFacing(this.engine.bramFacing);
@@ -678,6 +700,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     if (this.successOpen) return;
     this.engine.reset();
     this.moveCount = 0;
+    AudioManager.play(AudioKeys.RESET);
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
     this.bram.setPosition(target.x, target.y);
     this.bram.setFacing(this.engine.bramFacing);
@@ -796,6 +819,10 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.successOpen = true;
     this.bram.celebrate();
 
+    // Warm celebratory sting (slightly delayed so it doesn't collide
+    // with the portal_open cue that fired on the last socket fill).
+    this.time.delayedCall(220, () => AudioManager.play(AudioKeys.SUCCESS_WARM));
+
     // Gold halo under Bram's feet for the celebration.
     if (this.spritesReady()) {
       const halo = this.add.image(this.bram.x, this.bram.y + 24, GridAssets.VFX_GOLD_HALO)
@@ -895,7 +922,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.tweens.add({ targets: [niloLine, bramLine], alpha: 1, duration: 300, delay: 220 });
 
     // Sprite back button: real button image + label, hand cursor on hover.
-    this.makeSpriteButton(640, 510, 'Return to menu', depth + 4, () => this.scene.start('MenuScene'));
+    this.makeSpriteButton(640, 510, 'Return to menu', depth + 4, () => this.exitToMenu());
     void [panel, banner, niloPortrait, bramPortrait];
   }
 
@@ -939,7 +966,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       fontSize: '22px', color: '#2a1f12'
     }).setOrigin(0.5).setDepth(depth + 2);
 
-    this.makeButton(480, 408, 320, 50, 'Return to menu', depth + 2, () => this.scene.start('MenuScene'));
+    this.makeButton(480, 408, 320, 50, 'Return to menu', depth + 2, () => this.exitToMenu());
   }
 
   private makeButton(
@@ -960,6 +987,12 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     hit.on('pointerout',  () => text.setScale(1));
     hit.on('pointerdown', onClick);
     return { destroy() { bg.destroy(); text.destroy(); hit.destroy(); } };
+  }
+
+  /** Stop ambient + transition back to menu. Shared exit path. */
+  private exitToMenu() {
+    AudioManager.stop(AudioKeys.AMBIENT_RATTLEWOOD);
+    this.scene.start('MenuScene');
   }
 
   // ─── backdrop ─────────────────────────────────────────────────────────────
