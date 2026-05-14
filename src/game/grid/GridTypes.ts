@@ -40,6 +40,11 @@ export interface EngineState {
   numberedCarried: number[];
   grid: CellType[][];
   cellValues: Record<string, number>;
+  /**
+   * Per-socket accept mode keyed by `"x,y"`. Absent entries default to
+   * 'exact'. Used by Make 10 / sum-pair sockets.
+   */
+  cellAcceptModes: Record<string, NumberedAcceptMode>;
 }
 
 /**
@@ -88,9 +93,19 @@ export interface MoveResult {
  * the overlay just labels it with a required/carried number. Used by
  * Number Gate rooms.
  */
+/**
+ * How a numbered socket consumes inventory when Bram steps on it.
+ *  - 'exact':    needs one numbered stone whose value equals socket.value.
+ *  - 'sum_pair': needs any two numbered stones whose values sum to
+ *                socket.value. Both stones are consumed on fill.
+ */
+export type NumberedAcceptMode = 'exact' | 'sum_pair';
+
 export interface NumberedCell {
   kind: 'stone' | 'socket';
   value: number;
+  /** Sockets only. Defaults to 'exact'. */
+  acceptMode?: NumberedAcceptMode;
 }
 
 export interface GridMap {

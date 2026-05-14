@@ -57,9 +57,10 @@ export class MenuScene extends Phaser.Scene {
     addButton(this, 'Platform', 244, 562, 130, 34, () => this.scene.start('PlatformScene'));
     addButton(this, 'Top-Down', 384, 562, 136, 34, () => this.scene.start('TopDownScene'));
     addButton(this, '◴ Clocktower Marsh: Tell Time', 104, 602, 416, 34, () => this.scene.start('ClockTowerScene'));
-    addButton(this, '▦ Broken Bridge', 104, 640, 130, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'broken_bridge' }));
-    addButton(this, '▦ Stone Garden', 244, 640, 130, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'stone_garden' }));
-    addButton(this, '▦ Number Gate',  384, 640, 136, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'number_gate'  }));
+    addButton(this, '▦ Bridge',       104, 640,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'broken_bridge' }));
+    addButton(this, '▦ Garden',       210, 640,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'stone_garden'  }));
+    addButton(this, '▦ Numbers',      316, 640,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'number_gate'   }));
+    addButton(this, '▦ Make 10',      422, 640,  98, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'make_10'       }));
 
     // Reset progress: sprite back-icon + label if loaded, fallback otherwise
     if (this.hasUiSprites()) {

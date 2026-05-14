@@ -96,6 +96,54 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
     },
   },
 
+  // Make 10 (v0.5) — first real arithmetic-teaching room. Sockets all
+  // value 10 with acceptMode 'sum_pair'; player must pair stones whose
+  // values sum to 10 (1+9, 2+8, 3+7, 4+6). Filling consumes BOTH stones.
+  make_10: {
+    id: 'make_10',
+    title: 'Puzzle Lab: Make 10',
+    map: `
+##############
+#B...........#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o..E#
+##############
+`,
+    numbered: {
+      // Left column stones — one half of each pair
+      '2,2': { kind: 'stone',  value: 1 },
+      '2,4': { kind: 'stone',  value: 2 },
+      '2,6': { kind: 'stone',  value: 3 },
+      '2,8': { kind: 'stone',  value: 4 },
+      // Middle column stones — the partner that completes 10
+      '6,2': { kind: 'stone',  value: 9 },
+      '6,4': { kind: 'stone',  value: 8 },
+      '6,6': { kind: 'stone',  value: 7 },
+      '6,8': { kind: 'stone',  value: 6 },
+      // Sockets — all value 10, all sum_pair acceptors
+      '8,2': { kind: 'socket', value: 10, acceptMode: 'sum_pair' },
+      '8,4': { kind: 'socket', value: 10, acceptMode: 'sum_pair' },
+      '8,6': { kind: 'socket', value: 10, acceptMode: 'sum_pair' },
+      '8,8': { kind: 'socket', value: 10, acceptMode: 'sum_pair' },
+    },
+    gateVisual: 'gate',
+    hints: {
+      welcome:        'Each socket wants two stones that add up to 10.',
+      firstUndo:      'Good — undo lets you put a stone back and try again.',
+      numberMismatch: 'Those two stones don\'t add to 10. Try a different pair.',
+    },
+    success: {
+      title:    'All four pairs make 10.',
+      niloLine: '"You see how numbers fit."',
+      bramLine: '"One plus the other, every time."',
+    },
+  },
+
   // Number Gate (v0.4) — uses the P0 number stones + numbered sockets +
   // alt gate visual. Each socket needs the matching numbered stone; the
   // wrong one bumps with a reject flash.

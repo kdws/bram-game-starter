@@ -4,6 +4,8 @@ import {
   EngineState,
   GridMap,
   MoveResult,
+  NumberedAcceptMode,
+  NumberedCell,
   TilePos
 } from './GridTypes';
 
@@ -83,6 +85,11 @@ export class GridPuzzleEngine {
   /** Numbered value associated with a cell, if any. */
   getCellValue(x: number, y: number): number | undefined {
     return this.state.cellValues[`${x},${y}`];
+  }
+
+  /** Per-socket accept mode. Returns 'exact' if not explicitly set. */
+  getCellAcceptMode(x: number, y: number): NumberedAcceptMode {
+    return this.state.cellAcceptModes[`${x},${y}`] ?? 'exact';
   }
 
   getCell(x: number, y: number): CellType {
@@ -201,8 +208,34 @@ export class GridPuzzleEngine {
     }
 
     if (target === 'socket_empty') {
-      // Numbered socket: needs a matching numbered stone in inventory.
+      // Numbered socket: needs a matching numbered stone (exact mode) or
+      // any pair summing to the socket value (sum_pair mode).
       if (targetValue !== undefined) {
+        const mode = this.state.cellAcceptModes[targetKey] ?? 'exact';
+
+        if (mode === 'sum_pair') {
+          const pair = this.findSumPair(this.state.numberedCarried, targetValue);
+          if (!pair) {
+            result.bumped = true;
+            result.numberMismatch = true;
+            result.numberValue = targetValue;
+            if (mutated) this.undoStack.push(snapshot);
+            return result;
+          }
+          // Remove the higher index first so the lower index stays valid.
+          const [iA, iB] = pair[0] > pair[1] ? pair : [pair[1], pair[0]];
+          this.state.numberedCarried.splice(iA, 1);
+          this.state.numberedCarried.splice(iB, 1);
+          this.state.grid[ny][nx] = 'socket_filled';
+          result.filledSocket = true;
+          result.numberValue = targetValue;
+          this.state.bram = { x: nx, y: ny };
+          result.moved = true;
+          this.finalizeMove(result, snapshot);
+          return result;
+        }
+
+        // exact mode (default)
         const idx = this.state.numberedCarried.indexOf(targetValue);
         if (idx < 0) {
           result.bumped = true;
@@ -278,9 +311,23 @@ export class GridPuzzleEngine {
     this.undoStack.push(snapshot);
   }
 
+  /**
+   * Find two indices in `values` whose entries sum to `target`. Returns
+   * `null` if no such pair exists. Used by sum_pair sockets.
+   * O(n²) but n ≤ 10 in practice.
+   */
+  private findSumPair(values: number[], target: number): [number, number] | null {
+    for (let i = 0; i < values.length; i++) {
+      for (let j = i + 1; j < values.length; j++) {
+        if (values[i] + values[j] === target) return [i, j];
+      }
+    }
+    return null;
+  }
+
   private parseMap(
     ascii: string,
-    numbered?: Record<string, { kind: 'stone' | 'socket'; value: number }>
+    numbered?: Record<string, NumberedCell>
   ): EngineState {
     const rows = ascii.replace(/^\n+|\n+$/g, '').split('\n').map(r => r.replace(/\s+$/, ''));
     const height = rows.length;
@@ -317,8 +364,9 @@ export class GridPuzzleEngine {
 
     // Apply numbered overlay. The ASCII must already place `s` (stone) or
     // `o` (socket_empty) at each tagged position; the overlay just records
-    // the value. We warn-log mismatches in dev but don't throw.
+    // the value (and accept-mode for sockets).
     const cellValues: Record<string, number> = {};
+    const cellAcceptModes: Record<string, NumberedAcceptMode> = {};
     if (numbered) {
       for (const [key, info] of Object.entries(numbered)) {
         const [xStr, yStr] = key.split(',');
@@ -334,6 +382,9 @@ export class GridPuzzleEngine {
           continue;
         }
         cellValues[key] = info.value;
+        if (info.kind === 'socket' && info.acceptMode) {
+          cellAcceptModes[key] = info.acceptMode;
+        }
       }
     }
 
@@ -343,7 +394,8 @@ export class GridPuzzleEngine {
       stonesCarried: 0,
       numberedCarried: [],
       grid,
-      cellValues
+      cellValues,
+      cellAcceptModes
     };
   }
 
@@ -354,7 +406,8 @@ export class GridPuzzleEngine {
       stonesCarried: s.stonesCarried,
       numberedCarried: s.numberedCarried.slice(),
       grid: s.grid.map(row => row.slice()),
-      cellValues: { ...s.cellValues }
+      cellValues: { ...s.cellValues },
+      cellAcceptModes: { ...s.cellAcceptModes }
     };
   }
 }

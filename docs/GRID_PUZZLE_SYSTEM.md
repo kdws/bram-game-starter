@@ -307,6 +307,7 @@ engine first, then the scene).
 | `broken_bridge` | Puzzle Lab: Broken Bridge | One push block, four stones, four sockets — the teaching room. |
 | `stone_garden`  | Puzzle Lab: Stone Garden  | **Twin push blocks**, four stones, four sockets — symmetric pair of push moments, tests pattern recognition. |
 | `number_gate`   | Puzzle Lab: Number Gate   | **Numbered stones + numbered sockets.** Each socket needs the matching numbered stone; wrong deposits bump with a `socket_reject` flash. Stone-to-socket pairing is intentionally scrambled across rows so the player has to read numbers, not just walk down the column. Alternate gate visual instead of arch. |
+| `make_10`       | Puzzle Lab: Make 10       | **First real arithmetic room.** All four sockets display 10 and use `acceptMode: 'sum_pair'`. The player must deposit pairs of numbered stones that sum to 10 (1+9, 2+8, 3+7, 4+6). Filling consumes both stones; mismatched pairs bump with the reject flash. |
 
 ### Number Gate mechanic (v0.4 — 2026-05-12)
 
@@ -335,6 +336,30 @@ The `gateVisual: 'arch' | 'gate'` field on `PuzzleRoom` picks between
 the existing exit arch sprites and the new `gate_closed.png` /
 `gate_open.png` pair. Both still drive the same `exit` cell type
 in the engine — the engine doesn't care which visual it is.
+
+### Sum-pair sockets (v0.5 — 2026-05-12)
+
+`NumberedCell.acceptMode` chooses between `'exact'` (default) and
+`'sum_pair'`. In sum_pair mode the engine searches `numberedCarried`
+for **any two values that sum to socket.value** and consumes both
+when found.
+
+```ts
+numbered: {
+  '8,2': { kind: 'socket', value: 10, acceptMode: 'sum_pair' },
+}
+```
+
+- Search is O(n²) but inventory is ≤ 10 stones in practice.
+- The lower-index match is removed second so the higher index stays
+  valid during splice.
+- `MoveResult.numberMismatch` fires when no valid pair exists; the
+  same `socket_reject` flash + one-shot hint apply.
+- Per-socket modes are stored in `EngineState.cellAcceptModes`
+  (keyed by `"x,y"`) and survive undo/reset via `cloneState`.
+
+This unlocks Make 10 / Make N puzzle families without per-room scene
+logic — only the data changes.
 
 ---
 
