@@ -47,7 +47,7 @@ export class GridPuzzleEngine {
   private readonly undoStack: EngineState[] = [];
 
   constructor(map: GridMap) {
-    this.initial = this.parseMap(map.ascii);
+    this.initial = this.parseMap(map.ascii, map.numbered);
     this.state = this.cloneState(this.initial);
   }
 
@@ -68,8 +68,21 @@ export class GridPuzzleEngine {
   get stonesCarried(): number {
     return this.state.stonesCarried;
   }
+  /** Read-only copy of the value-tagged stones Bram is carrying. */
+  get numberedCarried(): number[] {
+    return this.state.numberedCarried.slice();
+  }
+  /** Total stones in inventory (generic + numbered). */
+  get totalStonesCarried(): number {
+    return this.state.stonesCarried + this.state.numberedCarried.length;
+  }
   get canUndo(): boolean {
     return this.undoStack.length > 0;
+  }
+
+  /** Numbered value associated with a cell, if any. */
+  getCellValue(x: number, y: number): number | undefined {
+    return this.state.cellValues[`${x},${y}`];
   }
 
   getCell(x: number, y: number): CellType {
@@ -135,7 +148,9 @@ export class GridPuzzleEngine {
       filledSocket: false,
       pushedBlock: false,
       reachedExit: false,
-      solved: false
+      solved: false,
+      numberMismatch: false,
+      numberValue: null
     };
 
     const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0;
@@ -143,6 +158,8 @@ export class GridPuzzleEngine {
     const nx = this.state.bram.x + dx;
     const ny = this.state.bram.y + dy;
     const target = this.getCell(nx, ny);
+    const targetKey = `${nx},${ny}`;
+    const targetValue = this.state.cellValues[targetKey];
 
     // Always capture a snapshot before any mutation so undo can restore
     // facing, position, inventory, and grid.
@@ -184,6 +201,27 @@ export class GridPuzzleEngine {
     }
 
     if (target === 'socket_empty') {
+      // Numbered socket: needs a matching numbered stone in inventory.
+      if (targetValue !== undefined) {
+        const idx = this.state.numberedCarried.indexOf(targetValue);
+        if (idx < 0) {
+          result.bumped = true;
+          result.numberMismatch = true;
+          result.numberValue = targetValue;
+          if (mutated) this.undoStack.push(snapshot);
+          return result;
+        }
+        this.state.numberedCarried.splice(idx, 1);
+        this.state.grid[ny][nx] = 'socket_filled';
+        // cellValues[targetKey] stays — the socket is now lit with that value.
+        result.filledSocket = true;
+        result.numberValue = targetValue;
+        this.state.bram = { x: nx, y: ny };
+        result.moved = true;
+        this.finalizeMove(result, snapshot);
+        return result;
+      }
+      // Plain socket: needs any generic stone in inventory.
       if (this.state.stonesCarried <= 0) {
         result.bumped = true;
         if (mutated) this.undoStack.push(snapshot);
@@ -199,7 +237,14 @@ export class GridPuzzleEngine {
     }
 
     if (target === 'stone') {
-      this.state.stonesCarried += 1;
+      if (targetValue !== undefined) {
+        this.state.numberedCarried.push(targetValue);
+        result.numberValue = targetValue;
+        // Remove the value from cellValues — the cell is now plain floor.
+        delete this.state.cellValues[targetKey];
+      } else {
+        this.state.stonesCarried += 1;
+      }
       this.state.grid[ny][nx] = 'floor';
       result.collectedStone = true;
     }
@@ -233,7 +278,10 @@ export class GridPuzzleEngine {
     this.undoStack.push(snapshot);
   }
 
-  private parseMap(ascii: string): EngineState {
+  private parseMap(
+    ascii: string,
+    numbered?: Record<string, { kind: 'stone' | 'socket'; value: number }>
+  ): EngineState {
     const rows = ascii.replace(/^\n+|\n+$/g, '').split('\n').map(r => r.replace(/\s+$/, ''));
     const height = rows.length;
     const width = rows.reduce((m, r) => Math.max(m, r.length), 0);
@@ -267,11 +315,35 @@ export class GridPuzzleEngine {
       }
     }
 
+    // Apply numbered overlay. The ASCII must already place `s` (stone) or
+    // `o` (socket_empty) at each tagged position; the overlay just records
+    // the value. We warn-log mismatches in dev but don't throw.
+    const cellValues: Record<string, number> = {};
+    if (numbered) {
+      for (const [key, info] of Object.entries(numbered)) {
+        const [xStr, yStr] = key.split(',');
+        const x = parseInt(xStr, 10);
+        const y = parseInt(yStr, 10);
+        if (Number.isNaN(x) || Number.isNaN(y)) continue;
+        if (y < 0 || y >= height || x < 0 || x >= width) continue;
+        const cell = grid[y][x];
+        const wantStone  = info.kind === 'stone'  && cell === 'stone';
+        const wantSocket = info.kind === 'socket' && cell === 'socket_empty';
+        if (!wantStone && !wantSocket) {
+          // Tag points at the wrong cell type — skip silently in prod.
+          continue;
+        }
+        cellValues[key] = info.value;
+      }
+    }
+
     return {
       bram,
       bramFacing: 'right',
       stonesCarried: 0,
-      grid
+      numberedCarried: [],
+      grid,
+      cellValues
     };
   }
 
@@ -280,7 +352,9 @@ export class GridPuzzleEngine {
       bram: { ...s.bram },
       bramFacing: s.bramFacing,
       stonesCarried: s.stonesCarried,
-      grid: s.grid.map(row => row.slice())
+      numberedCarried: s.numberedCarried.slice(),
+      grid: s.grid.map(row => row.slice()),
+      cellValues: { ...s.cellValues }
     };
   }
 }

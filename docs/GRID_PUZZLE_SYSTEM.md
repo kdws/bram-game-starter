@@ -306,6 +306,35 @@ engine first, then the scene).
 |---|---|---|
 | `broken_bridge` | Puzzle Lab: Broken Bridge | One push block, four stones, four sockets — the teaching room. |
 | `stone_garden`  | Puzzle Lab: Stone Garden  | **Twin push blocks**, four stones, four sockets — symmetric pair of push moments, tests pattern recognition. |
+| `number_gate`   | Puzzle Lab: Number Gate   | **Numbered stones + numbered sockets.** Each socket needs the matching numbered stone; wrong deposits bump with a `socket_reject` flash. Stone-to-socket pairing is intentionally scrambled across rows so the player has to read numbers, not just walk down the column. Alternate gate visual instead of arch. |
+
+### Number Gate mechanic (v0.4 — 2026-05-12)
+
+The engine extension is opt-in per room via the `numbered` map field
+in `PuzzleRoom`. Tag any tile in the ASCII map that holds a stone
+(`s`) or socket (`o`) with `"x,y": { kind: 'stone' | 'socket', value: 1–10 }`.
+
+Engine behavior changes for tagged tiles:
+
+- **Pickup a numbered stone** → its value pushes onto
+  `engine.numberedCarried: number[]` instead of incrementing
+  `stonesCarried`. The original cell value is removed from
+  `cellValues` so undo can restore it.
+- **Deposit on a numbered socket** → engine checks
+  `numberedCarried` for the socket's required value. If found,
+  removes that one and fills the socket (keeping the value tagged
+  for visual rendering). If not, returns
+  `{ bumped: true, numberMismatch: true, numberValue: required }`
+  — scene flashes `socket_reject.png` at the target tile and fires
+  the room's mismatch hint once.
+- **Generic stones still work alongside numbered stones.** The
+  HUD shows the numbered values as `[3] [5]` chips plus any plain
+  count.
+
+The `gateVisual: 'arch' | 'gate'` field on `PuzzleRoom` picks between
+the existing exit arch sprites and the new `gate_closed.png` /
+`gate_open.png` pair. Both still drive the same `exit` cell type
+in the engine — the engine doesn't care which visual it is.
 
 ---
 

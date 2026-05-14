@@ -53,6 +53,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   private successOpen = false;
   private hasShownInvalidPushHint = false;
   private hasShownUndoHint = false;
+  private hasShownMismatchHint = false;
   private moveCount = 0;
   private pointerStart: { x: number; y: number } | null = null;
   private room: PuzzleRoom = PUZZLE_ROOMS[DEFAULT_ROOM_ID];
@@ -65,6 +66,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     // Reset per-scene state so re-entering doesn't carry hint-fired flags
     this.hasShownInvalidPushHint = false;
     this.hasShownUndoHint = false;
+    this.hasShownMismatchHint = false;
     this.moveCount = 0;
     this.pointerStart = null;
     this.busy = false;
@@ -80,7 +82,10 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x121814);
     this.drawBackdrop();
 
-    this.engine = new GridPuzzleEngine({ ascii: this.room.map });
+    this.engine = new GridPuzzleEngine({
+      ascii: this.room.map,
+      numbered: this.room.numbered,
+    });
     const w = this.engine.width * TILE;
     this.gridOriginX = Math.floor((1280 - w) / 2);
     this.gridOriginY = 132;
@@ -235,24 +240,42 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     const floorKey = (gx + gy) % 2 === 0 ? GridAssets.FLOOR : GridAssets.FLOOR_ALT;
     out.push(this.add.image(cx, cy, floorKey).setScale(SC_FLOOR).setDepth(1));
 
-    switch (cell) {
-      case 'stone':
-        out.push(
-          this.add.image(cx, cy + 2, GridAssets.REPAIR_STONE)
-            .setScale(SC_STONE).setDepth(4)
-        );
-        break;
+    const cellValue = this.engine.getCellValue(gx, gy);
 
-      case 'socket_empty':
-        out.push(
-          this.add.image(cx, cy, GridAssets.SOCKET_EMPTY)
-            .setScale(SC_SOCKET).setDepth(3)
-        );
+    switch (cell) {
+      case 'stone': {
+        // Numbered variant if the engine tagged this cell with a value.
+        const key = cellValue !== undefined
+          ? `grid_number_stone_${cellValue}`
+          : GridAssets.REPAIR_STONE;
+        const img = this.textures.exists(key)
+          ? this.add.image(cx, cy + 2, key)
+          : this.add.image(cx, cy + 2, GridAssets.REPAIR_STONE);
+        img.setScale(SC_STONE).setDepth(4);
+        out.push(img);
         break;
+      }
+
+      case 'socket_empty': {
+        const key = cellValue !== undefined
+          ? `grid_socket_unlit_${cellValue}`
+          : GridAssets.SOCKET_EMPTY;
+        const img = this.textures.exists(key)
+          ? this.add.image(cx, cy, key)
+          : this.add.image(cx, cy, GridAssets.SOCKET_EMPTY);
+        img.setScale(SC_SOCKET).setDepth(3);
+        out.push(img);
+        break;
+      }
 
       case 'socket_filled': {
-        const filled = this.add.image(cx, cy, GridAssets.SOCKET_FILLED)
-          .setScale(SC_SOCKET).setDepth(3);
+        const key = cellValue !== undefined
+          ? `grid_socket_lit_${cellValue}`
+          : GridAssets.SOCKET_FILLED;
+        const filled = this.textures.exists(key)
+          ? this.add.image(cx, cy, key)
+          : this.add.image(cx, cy, GridAssets.SOCKET_FILLED);
+        filled.setScale(SC_SOCKET).setDepth(3);
         // gentle pulse to show active repair energy
         this.tweens.add({
           targets: filled, alpha: 0.75, duration: 900,
@@ -271,10 +294,13 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
       case 'exit': {
         const open = this.engine.allSocketsRepaired();
-        const key  = open ? GridAssets.EXIT_OPEN : GridAssets.EXIT_CLOSED;
+        const useGate = this.room.gateVisual === 'gate';
+        const key  = useGate
+          ? (open ? GridAssets.GATE_OPEN   : GridAssets.GATE_CLOSED)
+          : (open ? GridAssets.EXIT_OPEN   : GridAssets.EXIT_CLOSED);
         const img  = this.add.image(cx, cy - 4, key).setScale(SC_EXIT).setDepth(5);
         if (open) {
-          // soft glow pulse on the open portal
+          // soft glow pulse on the open portal / gate
           this.tweens.add({
             targets: img, alpha: 0.82, duration: 700,
             yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
@@ -286,6 +312,25 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     }
 
     return out;
+  }
+
+  /**
+   * Flash a socket_reject overlay at the target tile and play a sour bump
+   * sound. Called when the player tried to deposit a wrong-numbered stone.
+   */
+  private flashRejectAt(gx: number, gy: number) {
+    if (!this.spritesReady()) return;
+    if (!this.textures.exists(GridAssets.SOCKET_REJECT)) return;
+    const { x: cx, y: cy } = this.tileToWorld(gx, gy);
+    const flash = this.add.image(cx, cy, GridAssets.SOCKET_REJECT)
+      .setScale(SC_SOCKET)
+      .setDepth(45)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: flash, alpha: 1,
+      duration: 100, yoyo: true, hold: 220, ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy()
+    });
   }
 
   // ─── procedural drawCell (fallback only) ──────────────────────────────────
@@ -643,6 +688,16 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         this.hasShownInvalidPushHint = true;
         this.setTip(this.room.hints.invalidPush);
       }
+      // Wrong-number deposit: flash the socket_reject overlay at the target.
+      if (result.numberMismatch) {
+        const tx = this.engine.bram.x + (dir === 'left' ? -1 : dir === 'right' ? 1 : 0);
+        const ty = this.engine.bram.y + (dir === 'up'   ? -1 : dir === 'down'  ? 1 : 0);
+        this.flashRejectAt(tx, ty);
+        if (!this.hasShownMismatchHint && this.room.hints.numberMismatch) {
+          this.hasShownMismatchHint = true;
+          this.setTip(this.room.hints.numberMismatch);
+        }
+      }
       return;
     }
 
@@ -723,11 +778,24 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   // ─── HUD refresh ─────────────────────────────────────────────────────────
 
   private refreshHUD() {
-    const carrying = this.engine.stonesCarried;
+    const generic  = this.engine.stonesCarried;
+    const numbered = this.engine.numberedCarried;
     const total    = this.engine.countSocketsTotal();
     const done     = this.engine.countSocketsRepaired();
-    const gateNote = this.engine.allSocketsRepaired() ? '    (gate open — step on E)' : '';
-    this.hudInventory.setText(`Stones carried: ${carrying}`);
+    const gateWord = this.room.gateVisual === 'gate' ? 'gate' : 'exit';
+    const gateNote = this.engine.allSocketsRepaired()
+      ? `    (${gateWord} open — step on E)` : '';
+
+    // Inventory display: if there are numbered stones, list their values;
+    // otherwise show the plain count.
+    let invLine: string;
+    if (numbered.length > 0) {
+      const tags = numbered.map(v => `[${v}]`).join(' ');
+      invLine = `Stones: ${tags}` + (generic > 0 ? `   plus ${generic} plain` : '');
+    } else {
+      invLine = `Stones carried: ${generic}`;
+    }
+    this.hudInventory.setText(invLine);
     this.hudProgress.setText(`Sockets repaired: ${done} / ${total}${gateNote}`);
   }
 

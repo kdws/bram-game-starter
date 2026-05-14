@@ -201,12 +201,12 @@ For each asset:
 
 | Priority | Item | Status |
 |---|---|---|
-| P0 | Number stones 1, 2, 5, 8, 9, 10 | ⏳ awaiting |
-| P0 | Numbered sockets 1–10 (lit + unlit) | ⏳ awaiting |
-| P0 | Gate closed / open | ⏳ awaiting |
-| P0 | Socket reject state | ⏳ awaiting |
-| P1 | Sound effects (8–12) | ⏳ awaiting |
-| P1 | Background music (2 loops) | ⏳ awaiting |
+| P0 | Number stones 1, 2, 5, 8, 9, 10 | ✅ shipped 2026-05-12 (P0 Number Gate Asset Pack) |
+| P0 | Numbered sockets 1–10 (lit + unlit) | ✅ shipped 2026-05-12 |
+| P0 | Gate closed / open | ✅ shipped 2026-05-12 |
+| P0 | Socket reject state | ✅ shipped 2026-05-12 |
+| P1 | Sound effects (8–12) | ✅ shipped 2026-05-12 (synthesized placeholders, see AUDIO_SYSTEM.md) |
+| P1 | Background music (2 loops) | 🟡 1 of 2 shipped (ambient_rattlewood_loop). menu_theme still needed. |
 | P1 | Animated VFX sheets (3 effects) | ⏳ awaiting |
 | P2 | Clocktower Marsh tileset | ⏳ awaiting |
 | P2 | Coastal House tileset | ⏳ awaiting |

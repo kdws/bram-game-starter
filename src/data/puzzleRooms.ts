@@ -6,17 +6,25 @@
  * The scene class is reused — no new scene needed.
  */
 
+import type { NumberedCell } from '../game/grid/GridTypes';
+
 export interface PuzzleRoom {
   id: string;
   /** Title shown at the top of the scene. */
   title: string;
   /** ASCII map. See `GridPuzzleEngine` for the cell legend. */
   map: string;
+  /** Optional value-tag overlay for numbered stones / sockets. */
+  numbered?: Record<string, NumberedCell>;
+  /** Which exit visual to use. Defaults to 'arch'. */
+  gateVisual?: 'arch' | 'gate';
   /** Three layered hints that fire from the scene as events happen. */
   hints: {
     welcome: string;
     invalidPush?: string;
     firstUndo?: string;
+    /** Fires the first time the player tries a wrong-number deposit. */
+    numberMismatch?: string;
   };
   /** Lines shown on the success panel. */
   success: {
@@ -85,6 +93,50 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
       title:    'The garden remembers.',
       niloLine: '"You set them right."',
       bramLine: '"It took patience."',
+    },
+  },
+
+  // Number Gate (v0.4) — uses the P0 number stones + numbered sockets +
+  // alt gate visual. Each socket needs the matching numbered stone; the
+  // wrong one bumps with a reject flash.
+  number_gate: {
+    id: 'number_gate',
+    title: 'Puzzle Lab: Number Gate',
+    map: `
+##############
+#B...........#
+#.s.....o....#
+#............#
+#.s.....o....#
+#............#
+#.s.....o....#
+#............#
+#.s.....o...E#
+##############
+`,
+    numbered: {
+      // Stones (left column) — order is intentionally scrambled so the
+      // player has to read the numbers, not just walk down the list.
+      '2,2': { kind: 'stone',  value: 3 },
+      '2,4': { kind: 'stone',  value: 5 },
+      '2,6': { kind: 'stone',  value: 1 },
+      '2,8': { kind: 'stone',  value: 4 },
+      // Sockets (right column) — paired by number, not by row.
+      '8,2': { kind: 'socket', value: 1 },
+      '8,4': { kind: 'socket', value: 4 },
+      '8,6': { kind: 'socket', value: 3 },
+      '8,8': { kind: 'socket', value: 5 },
+    },
+    gateVisual: 'gate',
+    hints: {
+      welcome:        'Match each stone to its number. The gate opens when all four fit.',
+      firstUndo:      'Good — sometimes you have to count again.',
+      numberMismatch: 'That socket needs a different number.',
+    },
+    success: {
+      title:    'The numbers line up.',
+      niloLine: '"Each one belongs."',
+      bramLine: '"I counted right."',
     },
   },
 };

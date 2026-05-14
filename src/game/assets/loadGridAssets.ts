@@ -20,6 +20,17 @@ export function loadGridAssets(scene: Phaser.Scene): void {
   scene.load.image(GridAssets.REPAIR_STONE,  P + 'repair_stone_glow.png');
   scene.load.image(GridAssets.PUSH_BLOCK,    P + 'push_block_stone.png');
 
+  // Numbered stones 1–10
+  for (const n of [1,2,3,4,5,6,7,8,9,10]) {
+    scene.load.image(`grid_number_stone_${n}`,  P + `number_stone_${n}.png`);
+    scene.load.image(`grid_socket_unlit_${n}`,  T + `socket_unlit_${n}.png`);
+    scene.load.image(`grid_socket_lit_${n}`,    T + `socket_lit_${n}.png`);
+  }
+  // Gate + reject feedback
+  scene.load.image(GridAssets.GATE_CLOSED,   T + 'gate_closed.png');
+  scene.load.image(GridAssets.GATE_OPEN,     T + 'gate_open.png');
+  scene.load.image(GridAssets.SOCKET_REJECT, T + 'socket_reject.png');
+
   // ui
   scene.load.image(GridAssets.TIP_BANNER,      U + 'tip_banner.png');
   scene.load.image(GridAssets.PANEL_SMALL,     U + 'panel_small.png');

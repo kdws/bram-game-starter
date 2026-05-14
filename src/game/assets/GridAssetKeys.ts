@@ -14,6 +14,48 @@ export const GridAssets = {
   REPAIR_STONE:   'grid_repair_stone',
   PUSH_BLOCK:     'grid_push_block',
 
+  // Numbered stones 1–10 (props/grid/number_stone_<N>.png)
+  NUMBER_STONE_1:  'grid_number_stone_1',
+  NUMBER_STONE_2:  'grid_number_stone_2',
+  NUMBER_STONE_3:  'grid_number_stone_3',
+  NUMBER_STONE_4:  'grid_number_stone_4',
+  NUMBER_STONE_5:  'grid_number_stone_5',
+  NUMBER_STONE_6:  'grid_number_stone_6',
+  NUMBER_STONE_7:  'grid_number_stone_7',
+  NUMBER_STONE_8:  'grid_number_stone_8',
+  NUMBER_STONE_9:  'grid_number_stone_9',
+  NUMBER_STONE_10: 'grid_number_stone_10',
+
+  // Numbered sockets — unlit (empty) and lit (filled), values 1–10
+  SOCKET_UNLIT_1:  'grid_socket_unlit_1',
+  SOCKET_UNLIT_2:  'grid_socket_unlit_2',
+  SOCKET_UNLIT_3:  'grid_socket_unlit_3',
+  SOCKET_UNLIT_4:  'grid_socket_unlit_4',
+  SOCKET_UNLIT_5:  'grid_socket_unlit_5',
+  SOCKET_UNLIT_6:  'grid_socket_unlit_6',
+  SOCKET_UNLIT_7:  'grid_socket_unlit_7',
+  SOCKET_UNLIT_8:  'grid_socket_unlit_8',
+  SOCKET_UNLIT_9:  'grid_socket_unlit_9',
+  SOCKET_UNLIT_10: 'grid_socket_unlit_10',
+
+  SOCKET_LIT_1:  'grid_socket_lit_1',
+  SOCKET_LIT_2:  'grid_socket_lit_2',
+  SOCKET_LIT_3:  'grid_socket_lit_3',
+  SOCKET_LIT_4:  'grid_socket_lit_4',
+  SOCKET_LIT_5:  'grid_socket_lit_5',
+  SOCKET_LIT_6:  'grid_socket_lit_6',
+  SOCKET_LIT_7:  'grid_socket_lit_7',
+  SOCKET_LIT_8:  'grid_socket_lit_8',
+  SOCKET_LIT_9:  'grid_socket_lit_9',
+  SOCKET_LIT_10: 'grid_socket_lit_10',
+
+  // Gate (alternate exit visual for Number Gate rooms)
+  GATE_CLOSED:   'grid_gate_closed',
+  GATE_OPEN:     'grid_gate_open',
+
+  // Socket reject feedback (flash on wrong-number deposit)
+  SOCKET_REJECT: 'grid_socket_reject',
+
   // --- ui (ui/grid/) — shared across scenes despite the "grid" namespace ---
   TIP_BANNER:        'grid_ui_tip_banner',       // (has baked text — kept but unused)
   PANEL_SMALL:       'grid_ui_panel_small',
