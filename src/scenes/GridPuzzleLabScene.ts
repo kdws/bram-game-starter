@@ -56,10 +56,12 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   private hasShownInvalidPushHint = false;
   private hasShownUndoHint = false;
   private hasShownMismatchHint = false;
+  private hasShownPartialHint = false;
   private moveCount = 0;
   private pointerStart: { x: number; y: number } | null = null;
   private room: PuzzleRoom = PUZZLE_ROOMS[DEFAULT_ROOM_ID];
   private tutorialObjects: Phaser.GameObjects.GameObject[] = [];
+  private niloSpirit?: Phaser.GameObjects.Sprite;
 
   constructor() { super('GridPuzzleLabScene'); }
 
@@ -70,6 +72,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.hasShownInvalidPushHint = false;
     this.hasShownUndoHint = false;
     this.hasShownMismatchHint = false;
+    this.hasShownPartialHint = false;
     this.moveCount = 0;
     this.pointerStart = null;
     this.busy = false;
@@ -78,6 +81,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.dynamicCellImages = [];
     this.tipBannerImg = null;
     this.tutorialObjects = [];
+    this.niloSpirit = undefined;
   }
 
   // ─── lifecycle ───────────────────────────────────────────────────────────
@@ -107,6 +111,9 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       this.buildSceneryLayer();
     }
 
+    // Register sprite-sheet animations before any animated helpers are created.
+    this.registerVfxAnimations();
+
     // Initial dynamic cells (stones, sockets, push block, exit)
     this.renderDynamicCells();
 
@@ -115,18 +122,19 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.bram = new Bram(this, bramWorld.x, bramWorld.y, { scale: 0.45 });
     this.bram.setDepth(10);
     this.bram.setFacing(this.engine.bramFacing);
+    this.createNiloSpirit(bramWorld.x, bramWorld.y);
 
     this.bindKeys();
     this.bindPointerInput();
     this.buildTouchControls();
     this.refreshHUD();
 
-    this.registerVfxAnimations();
     this.maybeShowGestureTutorial();
 
     // Start cozy ambient pad for puzzle play. Already-running loops are
     // a no-op inside AudioManager.
     AudioManager.loop(AudioKeys.AMBIENT_RATTLEWOOD);
+    this.events.once('shutdown', () => AudioManager.stop(AudioKeys.AMBIENT_RATTLEWOOD));
   }
 
   // ─── animation setup ─────────────────────────────────────────────────────
@@ -138,6 +146,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       { key: GridAssets.VFX_GOLD_VICTORY_ANIM, prefix: 'gold_victory_sparkles_anim_', count: 6, frameRate: 12 },
       { key: GridAssets.HINT_SWIPE_RIGHT,       prefix: 'hint_swipe_right_',           count: 6, frameRate: 8  },
       { key: GridAssets.HINT_TAP,               prefix: 'hint_tap_',                   count: 6, frameRate: 10 },
+      { key: GridAssets.NILO_SPIRIT_IDLE,       prefix: 'nilo_spirit_idle_',            count: 3, frameRate: 6  },
     ];
     for (const { key, prefix, count, frameRate } of defs) {
       if (!this.textures.exists(key) || this.anims.exists(key)) continue;
@@ -147,7 +156,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
           prefix, start: 1, end: count, zeroPad: 4, suffix: '.png'
         }),
         frameRate,
-        repeat: 0
+        repeat: key === GridAssets.NILO_SPIRIT_IDLE ? -1 : 0
       });
     }
   }
@@ -209,6 +218,50 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.tweens.add({
       targets: objs, alpha: 0, duration: 240, ease: 'Quad.easeIn',
       onComplete: () => { for (const o of objs) o.destroy(); }
+    });
+  }
+
+
+  private createNiloSpirit(bramX: number, bramY: number) {
+    if (!this.textures.exists(GridAssets.NILO_SPIRIT_IDLE)) return;
+    this.niloSpirit = this.add.sprite(bramX + 40, bramY - 26, GridAssets.NILO_SPIRIT_IDLE)
+      .setScale(0.42)
+      .setAlpha(0.82)
+      .setDepth(9);
+    if (this.anims.exists(GridAssets.NILO_SPIRIT_IDLE)) {
+      this.niloSpirit.play(GridAssets.NILO_SPIRIT_IDLE);
+    }
+    this.tweens.add({
+      targets: this.niloSpirit,
+      y: this.niloSpirit.y - 5,
+      alpha: 0.96,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+  }
+
+  private moveNiloNear(x: number, y: number) {
+    if (!this.niloSpirit) return;
+    this.tweens.add({
+      targets: this.niloSpirit,
+      x: x + 40,
+      y: y - 26,
+      duration: 260,
+      ease: 'Sine.easeOut'
+    });
+  }
+
+  private pulseNilo() {
+    if (!this.niloSpirit) return;
+    this.tweens.add({
+      targets: this.niloSpirit,
+      scale: 0.52,
+      alpha: 1,
+      duration: 130,
+      yoyo: true,
+      ease: 'Quad.easeOut'
     });
   }
 
@@ -363,6 +416,22 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         break;
       }
 
+      case 'socket_partial': {
+        const img = this.add.image(cx, cy, GridAssets.SOCKET_PARTIAL)
+          .setScale(SC_SOCKET).setDepth(3);
+        this.tweens.add({
+          targets: img, alpha: 0.68, duration: 850,
+          yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+        out.push(img);
+        const first = this.engine.getPartialSocketValue(gx, gy);
+        const target = cellValue;
+        if (first !== undefined && target !== undefined) {
+          out.push(this.makePartialBadge(cx, cy, first, target).setDepth(5));
+        }
+        break;
+      }
+
       case 'socket_filled': {
         const key = cellValue !== undefined
           ? `grid_socket_lit_${cellValue}`
@@ -424,6 +493,23 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       color,
       shadow: { offsetX: 1, offsetY: 1, color: '#000', blur: 2, fill: true }
     }).setOrigin(0.5);
+  }
+
+  private makePartialBadge(cx: number, cy: number, first: number, target: number) {
+    const text = `${first} + ?`;
+    const group = this.add.container(cx, cy);
+    const bg = this.add.graphics();
+    bg.fillStyle(0x142b3a, 0.82).fillRoundedRect(-26, -12, 52, 24, 8);
+    bg.lineStyle(1, 0x8fdfff, 0.8).strokeRoundedRect(-26, -12, 52, 24, 8);
+    const label = this.add.text(0, 0, text, {
+      fontFamily: 'Georgia, serif',
+      fontSize: target > 10 ? '12px' : '13px',
+      fontStyle: 'bold',
+      color: '#dff8ff',
+      shadow: { offsetX: 1, offsetY: 1, color: '#00111a', blur: 2, fill: true }
+    }).setOrigin(0.5);
+    group.add([bg, label]);
+    return group;
   }
 
   /**
@@ -492,6 +578,11 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       g.lineStyle(2, 0x2a2218, 1).strokeCircle(cx, cy, 15);
       g.fillStyle(0x4a78a8, 0.18).fillCircle(cx, cy, 11);
       g.lineStyle(1, 0x6fb5e8, 0.5).strokeCircle(cx, cy, 8);
+    } else if (cell === 'socket_partial') {
+      g.fillStyle(0x6fb5e8, 0.16).fillCircle(cx, cy, 18);
+      g.fillStyle(0x14110d, 0.95).fillCircle(cx, cy, 15);
+      g.fillStyle(0x6fb5e8, 0.46).fillCircle(cx - 4, cy, 10);
+      g.lineStyle(2, 0x8fdfff, 0.75).strokeCircle(cx, cy, 14);
     } else if (cell === 'socket_filled') {
       g.fillStyle(0x6fb5e8, 0.32).fillCircle(cx, cy, 19);
       g.fillStyle(0x6fb5e8, 0.85).fillCircle(cx, cy, 13);
@@ -805,6 +896,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         const tx = this.engine.bram.x + (dir === 'left' ? -1 : dir === 'right' ? 1 : 0);
         const ty = this.engine.bram.y + (dir === 'up'   ? -1 : dir === 'down'  ? 1 : 0);
         this.flashRejectAt(tx, ty);
+        this.pulseNilo();
         if (!this.hasShownMismatchHint && this.room.hints.numberMismatch) {
           this.hasShownMismatchHint = true;
           this.setTip(this.room.hints.numberMismatch);
@@ -820,6 +912,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     // Audio cues that should fire on commit (not after tween):
     if (result.pushedBlock)    AudioManager.play(AudioKeys.BLOCK_PUSH);
     if (result.collectedStone) AudioManager.play(AudioKeys.PICKUP_STONE);
+    if (result.partialSocket)  AudioManager.play(AudioKeys.NILO_ENERGY, { volume: 0.7 });
     if (result.filledSocket)   AudioManager.play(AudioKeys.REPAIR_SOCKET);
 
     // "Gate just opened" cue — exit transitioned from closed to open
@@ -829,8 +922,14 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     }
 
     const target = this.tileToWorld(this.engine.bram.x, this.engine.bram.y);
+    this.moveNiloNear(target.x, target.y);
+    if (result.partialSocket || result.filledSocket) this.pulseNilo();
     this.renderDynamicCells();
     this.refreshHUD();
+    if (result.partialSocket && !this.hasShownPartialHint && this.room.hints.partial) {
+      this.hasShownPartialHint = true;
+      this.setTip(this.room.hints.partial);
+    }
 
     this.tweens.add({
       targets: this.bram,
@@ -841,6 +940,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       onComplete: () => {
         this.busy = false;
         if (result.collectedStone) this.spawnPickupSparkle(target.x, target.y);
+        if (result.partialSocket)  this.spawnPartialPulse(target.x, target.y, result.partialValue, result.numberValue);
         if (result.filledSocket)   this.spawnRepairBurst(target.x, target.y);
         if (result.filledSocket && result.pairUsed) {
           this.spawnEquationFlash(target.x, target.y, result.pairUsed[0], result.pairUsed[1]);
@@ -906,7 +1006,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     // otherwise show the plain count.
     let invLine: string;
     if (numbered.length > 0) {
-      const tags = numbered.map(v => `[${v}]`).join(' ');
+      const tags = numbered.map((v, i) => i === numbered.length - 1 ? `→[${v}]` : `[${v}]`).join(' ');
       invLine = `Stones: ${tags}` + (generic > 0 ? `   plus ${generic} plain` : '');
     } else {
       invLine = `Stones carried: ${generic}`;
@@ -940,6 +1040,29 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         targets: dust, scale: 0.36, alpha: 0,
         duration: 380, ease: 'Quad.easeOut',
         onComplete: () => dust.destroy()
+      });
+    }
+  }
+
+  private spawnPartialPulse(x: number, y: number, first: number | null, target: number | null) {
+    if (this.spritesReady() && this.textures.exists(GridAssets.VFX_BLUE_MOTES)) {
+      const mote = this.add.image(x, y, GridAssets.VFX_BLUE_MOTES)
+        .setScale(0.20).setDepth(44).setAlpha(0.85);
+      this.tweens.add({
+        targets: mote, scale: 0.34, alpha: 0,
+        duration: 540, ease: 'Quad.easeOut',
+        onComplete: () => mote.destroy()
+      });
+    }
+    if (first !== null && target !== null) {
+      const note = this.add.text(x + 14, y - 24, `${first} + ? = ${target}`, {
+        fontFamily: 'Georgia, serif', fontStyle: 'bold',
+        fontSize: '13px', color: '#dff8ff',
+        shadow: { offsetX: 1, offsetY: 1, color: '#00111a', blur: 2, fill: true }
+      }).setDepth(52);
+      this.tweens.add({
+        targets: note, y: note.y - 18, alpha: 0, duration: 850,
+        onComplete: () => note.destroy()
       });
     }
   }

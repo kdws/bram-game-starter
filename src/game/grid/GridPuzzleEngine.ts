@@ -20,6 +20,8 @@ import {
  *  - Walking onto a stone: collect (+1 inventory), cell becomes floor.
  *  - Walking onto an empty socket: if carrying ≥ 1 stone, fill it (cell
  *    becomes socket_filled, inventory -1) and step onto it. Otherwise bump.
+ *  - Walking onto a sum_pair socket deposits one carried numbered stone
+ *    first (`socket_partial`), then a second matching stone fills it.
  *  - Walking onto a filled socket: passable (acts like floor).
  *  - Walking onto a push block: if the cell beyond is *floor*, push
  *    the block into it and step into the vacated cell. Otherwise the
@@ -92,6 +94,11 @@ export class GridPuzzleEngine {
     return this.state.cellAcceptModes[`${x},${y}`] ?? 'exact';
   }
 
+  /** First value deposited into a sum_pair socket, if the cell is partial. */
+  getPartialSocketValue(x: number, y: number): number | undefined {
+    return this.state.partialSocketValues[`${x},${y}`];
+  }
+
   getCell(x: number, y: number): CellType {
     if (y < 0 || y >= this.state.grid.length) return 'wall';
     const row = this.state.grid[y];
@@ -123,11 +130,12 @@ export class GridPuzzleEngine {
   /** Sockets that started empty in the map. */
   countSocketsTotal(): number {
     // Initial empty + initial filled (none initially, but future-proof).
-    return this.countInitial('socket_empty') + this.countInitial('socket_filled');
+    return this.countInitial('socket_empty') + this.countInitial('socket_partial') + this.countInitial('socket_filled');
   }
 
   allSocketsRepaired(): boolean {
     return this.countCells('socket_empty') === 0
+        && this.countCells('socket_partial') === 0
         && this.countSocketsTotal() > 0;
   }
 
@@ -153,11 +161,13 @@ export class GridPuzzleEngine {
       attemptedPush: false,
       collectedStone: false,
       filledSocket: false,
+      partialSocket: false,
       pushedBlock: false,
       reachedExit: false,
       solved: false,
       numberMismatch: false,
       numberValue: null,
+      partialValue: null,
       pairUsed: null
     };
 
@@ -215,27 +225,20 @@ export class GridPuzzleEngine {
         const mode = this.state.cellAcceptModes[targetKey] ?? 'exact';
 
         if (mode === 'sum_pair') {
-          const pair = this.findSumPair(this.state.numberedCarried, targetValue);
-          if (!pair) {
+          const first = this.popLatestNumberedStone();
+          if (first === null) {
             result.bumped = true;
             result.numberMismatch = true;
             result.numberValue = targetValue;
             if (mutated) this.undoStack.push(snapshot);
             return result;
           }
-          // Capture values before splicing so pairUsed has the stone numbers.
-          const pairValues: [number, number] = [
-            this.state.numberedCarried[pair[0]],
-            this.state.numberedCarried[pair[1]]
-          ];
-          // Remove the higher index first so the lower index stays valid.
-          const [iA, iB] = pair[0] > pair[1] ? pair : [pair[1], pair[0]];
-          this.state.numberedCarried.splice(iA, 1);
-          this.state.numberedCarried.splice(iB, 1);
-          this.state.grid[ny][nx] = 'socket_filled';
-          result.filledSocket = true;
+
+          this.state.grid[ny][nx] = 'socket_partial';
+          this.state.partialSocketValues[targetKey] = first;
+          result.partialSocket = true;
           result.numberValue = targetValue;
-          result.pairUsed = pairValues;
+          result.partialValue = first;
           this.state.bram = { x: nx, y: ny };
           result.moved = true;
           this.finalizeMove(result, snapshot);
@@ -270,6 +273,48 @@ export class GridPuzzleEngine {
       this.state.stonesCarried -= 1;
       this.state.grid[ny][nx] = 'socket_filled';
       result.filledSocket = true;
+      this.state.bram = { x: nx, y: ny };
+      result.moved = true;
+      this.finalizeMove(result, snapshot);
+      return result;
+    }
+
+
+    if (target === 'socket_partial') {
+      const first = this.state.partialSocketValues[targetKey];
+      if (targetValue === undefined || first === undefined) {
+        // Should not happen, but treat as a gentle bump rather than corrupting state.
+        result.bumped = true;
+        if (mutated) this.undoStack.push(snapshot);
+        return result;
+      }
+
+      const second = this.peekLatestNumberedStone();
+      if (second === null) {
+        result.bumped = true;
+        result.numberMismatch = true;
+        result.numberValue = targetValue;
+        result.partialValue = first;
+        if (mutated) this.undoStack.push(snapshot);
+        return result;
+      }
+
+      if (first + second !== targetValue) {
+        result.bumped = true;
+        result.numberMismatch = true;
+        result.numberValue = targetValue;
+        result.partialValue = first;
+        if (mutated) this.undoStack.push(snapshot);
+        return result;
+      }
+
+      this.popLatestNumberedStone();
+      delete this.state.partialSocketValues[targetKey];
+      this.state.grid[ny][nx] = 'socket_filled';
+      result.filledSocket = true;
+      result.numberValue = targetValue;
+      result.partialValue = first;
+      result.pairUsed = [first, second];
       this.state.bram = { x: nx, y: ny };
       result.moved = true;
       this.finalizeMove(result, snapshot);
@@ -319,17 +364,19 @@ export class GridPuzzleEngine {
   }
 
   /**
-   * Find two indices in `values` whose entries sum to `target`. Returns
-   * `null` if no such pair exists. Used by sum_pair sockets.
-   * O(n²) but n ≤ 10 in practice.
+   * Sum-pair sockets use a tactile two-step deposit: the latest collected
+   * numbered stone is placed first, then the latest collected partner must
+   * complete the target. This avoids the old auto-pairing behavior where a
+   * socket silently chose any matching pair from the whole inventory.
    */
-  private findSumPair(values: number[], target: number): [number, number] | null {
-    for (let i = 0; i < values.length; i++) {
-      for (let j = i + 1; j < values.length; j++) {
-        if (values[i] + values[j] === target) return [i, j];
-      }
-    }
-    return null;
+  private popLatestNumberedStone(): number | null {
+    if (this.state.numberedCarried.length === 0) return null;
+    return this.state.numberedCarried.pop() ?? null;
+  }
+
+  private peekLatestNumberedStone(): number | null {
+    if (this.state.numberedCarried.length === 0) return null;
+    return this.state.numberedCarried[this.state.numberedCarried.length - 1];
   }
 
   private parseMap(
@@ -402,7 +449,8 @@ export class GridPuzzleEngine {
       numberedCarried: [],
       grid,
       cellValues,
-      cellAcceptModes
+      cellAcceptModes,
+      partialSocketValues: {}
     };
   }
 
@@ -414,7 +462,8 @@ export class GridPuzzleEngine {
       numberedCarried: s.numberedCarried.slice(),
       grid: s.grid.map(row => row.slice()),
       cellValues: { ...s.cellValues },
-      cellAcceptModes: { ...s.cellAcceptModes }
+      cellAcceptModes: { ...s.cellAcceptModes },
+      partialSocketValues: { ...s.partialSocketValues }
     };
   }
 }

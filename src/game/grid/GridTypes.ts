@@ -14,6 +14,7 @@ export type CellType =
   | 'exit'
   | 'stone'
   | 'socket_empty'
+  | 'socket_partial'
   | 'socket_filled'
   | 'push_block';
 
@@ -45,6 +46,12 @@ export interface EngineState {
    * 'exact'. Used by Make 10 / sum-pair sockets.
    */
   cellAcceptModes: Record<string, NumberedAcceptMode>;
+  /**
+   * Sum-pair sockets can hold one deposited number before the matching
+   * partner arrives. Keyed by "x,y" and only meaningful for
+   * `socket_partial` cells.
+   */
+  partialSocketValues: Record<string, number>;
 }
 
 /**
@@ -63,6 +70,8 @@ export interface MoveResult {
   attemptedPush: boolean;
   collectedStone: boolean;
   filledSocket: boolean;
+  /** True when a sum_pair socket accepted the first stone and became partial. */
+  partialSocket: boolean;
   pushedBlock: boolean;
   reachedExit: boolean;
   solved: boolean;
@@ -72,8 +81,10 @@ export interface MoveResult {
    * The scene uses this to flash a socket_reject animation.
    */
   numberMismatch: boolean;
-  /** The numbered value involved in the last pickup / fill / mismatch. */
+  /** The numbered target value involved in the last pickup / fill / mismatch. */
   numberValue: number | null;
+  /** The first deposited value on a sum_pair partial socket, if applicable. */
+  partialValue: number | null;
   /**
    * When a sum_pair socket was filled, the two stone values consumed.
    * Null for all other moves. Used by the scene to pick the right equation

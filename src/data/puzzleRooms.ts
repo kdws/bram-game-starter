@@ -23,6 +23,8 @@ export interface PuzzleRoom {
     welcome: string;
     invalidPush?: string;
     firstUndo?: string;
+    /** Fires when a sum_pair socket accepts the first stone. */
+    partial?: string;
     /** Fires the first time the player tries a wrong-number deposit. */
     numberMismatch?: string;
   };
@@ -134,6 +136,7 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
     gateVisual: 'gate',
     hints: {
       welcome:        'Each socket wants two stones that add up to 10.',
+      partial:        'First stone set. Find the partner that makes 10.',
       firstUndo:      'Good — undo lets you put a stone back and try again.',
       numberMismatch: 'Those two stones don\'t add to 10. Try a different pair.',
     },
@@ -227,6 +230,7 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
     gateVisual: 'gate',
     hints: {
       welcome:        'Each socket wants two stones that add up to 5.',
+      partial:        'First stone set. Find the partner that makes 5.',
       firstUndo:      'Good — undo lets you put a stone back and try again.',
       numberMismatch: "Those two stones don't add to 5. Try a different pair.",
     },
@@ -271,6 +275,7 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
     gateVisual: 'gate',
     hints: {
       welcome:        'Each socket wants two matching stones — a number plus itself.',
+      partial:        'First stone set. Find its matching twin.',
       firstUndo:      'Good — try pairing stones that look alike.',
       numberMismatch: "These don't pair up here. Look for two stones with the same value.",
     },
@@ -316,6 +321,7 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
     gateVisual: 'gate',
     hints: {
       welcome:        'Each socket wants two stones that add up to 20. Think tens.',
+      partial:        'First stone set. Find the partner that reaches 20.',
       firstUndo:      'Good — try thinking of 13 as ten and three.',
       numberMismatch: "Those two stones don't reach 20 yet. Try a bigger partner.",
     },
