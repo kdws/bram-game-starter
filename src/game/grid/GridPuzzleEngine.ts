@@ -157,7 +157,8 @@ export class GridPuzzleEngine {
       reachedExit: false,
       solved: false,
       numberMismatch: false,
-      numberValue: null
+      numberValue: null,
+      pairUsed: null
     };
 
     const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0;
@@ -222,6 +223,11 @@ export class GridPuzzleEngine {
             if (mutated) this.undoStack.push(snapshot);
             return result;
           }
+          // Capture values before splicing so pairUsed has the stone numbers.
+          const pairValues: [number, number] = [
+            this.state.numberedCarried[pair[0]],
+            this.state.numberedCarried[pair[1]]
+          ];
           // Remove the higher index first so the lower index stays valid.
           const [iA, iB] = pair[0] > pair[1] ? pair : [pair[1], pair[0]];
           this.state.numberedCarried.splice(iA, 1);
@@ -229,6 +235,7 @@ export class GridPuzzleEngine {
           this.state.grid[ny][nx] = 'socket_filled';
           result.filledSocket = true;
           result.numberValue = targetValue;
+          result.pairUsed = pairValues;
           this.state.bram = { x: nx, y: ny };
           result.moved = true;
           this.finalizeMove(result, snapshot);

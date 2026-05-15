@@ -47,5 +47,6 @@ export class BootScene extends Phaser.Scene {
 
     // Music / ambient
     this.load.audio(AudioKeys.AMBIENT_RATTLEWOOD, MUSIC + 'ambient_rattlewood_loop.wav');
+    this.load.audio(AudioKeys.MENU_THEME,         MUSIC + 'menu_theme.ogg');
   }
 }

@@ -1,0 +1,128 @@
+{
+  "frames": {
+    "blue_pickup_sparkles_anim_0001.png": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "sourceSize": {
+        "w": 176,
+        "h": 206
+      }
+    },
+    "blue_pickup_sparkles_anim_0002.png": {
+      "frame": {
+        "x": 176,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "sourceSize": {
+        "w": 176,
+        "h": 206
+      }
+    },
+    "blue_pickup_sparkles_anim_0003.png": {
+      "frame": {
+        "x": 352,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "sourceSize": {
+        "w": 176,
+        "h": 206
+      }
+    },
+    "blue_pickup_sparkles_anim_0004.png": {
+      "frame": {
+        "x": 528,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "sourceSize": {
+        "w": 176,
+        "h": 206
+      }
+    },
+    "blue_pickup_sparkles_anim_0005.png": {
+      "frame": {
+        "x": 704,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "sourceSize": {
+        "w": 176,
+        "h": 206
+      }
+    },
+    "blue_pickup_sparkles_anim_0006.png": {
+      "frame": {
+        "x": 880,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 176,
+        "h": 206
+      },
+      "sourceSize": {
+        "w": 176,
+        "h": 206
+      }
+    }
+  },
+  "meta": {
+    "app": "BRAM asset generator",
+    "version": "1.0"
+  }
+}

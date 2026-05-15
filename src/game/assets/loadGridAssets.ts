@@ -1,10 +1,16 @@
 import Phaser from 'phaser';
 import { GridAssets } from './GridAssetKeys';
 
-const T = 'assets/tilesets/rattlewood_grid/';
-const P = 'assets/props/grid/';
-const U = 'assets/ui/grid/';
-const V = 'assets/vfx/grid/';
+const T  = 'assets/tilesets/rattlewood_grid/';
+const CM = 'assets/tilesets/clocktower_marsh/';
+const P  = 'assets/props/grid/';
+const U  = 'assets/ui/grid/';
+const UC = 'assets/ui/cinematic/';
+const V  = 'assets/vfx/grid/';
+const VA = 'assets/vfx/grid/animated/';
+const EQ = 'assets/ui/grid/equations/';
+const TU = 'assets/ui/tutorial/';
+const SP = 'assets/sprites/';
 
 export function loadGridAssets(scene: Phaser.Scene): void {
   // tiles
@@ -20,12 +26,20 @@ export function loadGridAssets(scene: Phaser.Scene): void {
   scene.load.image(GridAssets.REPAIR_STONE,  P + 'repair_stone_glow.png');
   scene.load.image(GridAssets.PUSH_BLOCK,    P + 'push_block_stone.png');
 
-  // Numbered stones 1–10
-  for (const n of [1,2,3,4,5,6,7,8,9,10]) {
-    scene.load.image(`grid_number_stone_${n}`,  P + `number_stone_${n}.png`);
-    scene.load.image(`grid_socket_unlit_${n}`,  T + `socket_unlit_${n}.png`);
-    scene.load.image(`grid_socket_lit_${n}`,    T + `socket_lit_${n}.png`);
+  // Numbered stones 1–19
+  for (const n of [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]) {
+    scene.load.image(`grid_number_stone_${n}`, P + `number_stone_${n}.png`);
   }
+  // Numbered sockets 1–10
+  for (const n of [1,2,3,4,5,6,7,8,9,10]) {
+    scene.load.image(`grid_socket_unlit_${n}`, T + `socket_unlit_${n}.png`);
+    scene.load.image(`grid_socket_lit_${n}`,   T + `socket_lit_${n}.png`);
+  }
+  // Socket value 20
+  scene.load.image(GridAssets.SOCKET_UNLIT_20, T + 'socket_unlit_20.png');
+  scene.load.image(GridAssets.SOCKET_LIT_20,   T + 'socket_lit_20.png');
+  // Socket partial (sum_pair half-filled state)
+  scene.load.image(GridAssets.SOCKET_PARTIAL,  T + 'socket_partial.png');
   // Gate + reject feedback
   scene.load.image(GridAssets.GATE_CLOSED,   T + 'gate_closed.png');
   scene.load.image(GridAssets.GATE_OPEN,     T + 'gate_open.png');
@@ -65,7 +79,7 @@ export function loadGridAssets(scene: Phaser.Scene): void {
   scene.load.image(GridAssets.DECO_PLANT_TUFT,    T + 'plant_small_tuft.png');
   scene.load.image(GridAssets.DECO_ROCK_SMALL,    T + 'rock_small.png');
 
-  // vfx
+  // vfx — static
   scene.load.image(GridAssets.VFX_BLUE_PICKUP,  V + 'blue_pickup_sparkles.png');
   scene.load.image(GridAssets.VFX_BLUE_BURST,   V + 'blue_repair_burst.png');
   scene.load.image(GridAssets.VFX_BLUE_MOTES,   V + 'blue_energy_motes.png');
@@ -73,4 +87,61 @@ export function loadGridAssets(scene: Phaser.Scene): void {
   scene.load.image(GridAssets.VFX_GOLD_SHOWER,  V + 'gold_star_shower.png');
   scene.load.image(GridAssets.VFX_GOLD_HALO,    V + 'gold_halo_ring.png');
   scene.load.image(GridAssets.VFX_BUMP_DUST,    V + 'dust_bump_invalid.png');
+
+  // vfx — animated atlases
+  scene.load.atlas(GridAssets.VFX_BLUE_PICKUP_ANIM,  VA + 'blue_pickup_sparkles_anim.png',  VA + 'blue_pickup_sparkles_anim.json');
+  scene.load.atlas(GridAssets.VFX_BLUE_BURST_ANIM,   VA + 'blue_repair_burst_anim.png',     VA + 'blue_repair_burst_anim.json');
+  scene.load.atlas(GridAssets.VFX_GOLD_VICTORY_ANIM, VA + 'gold_victory_sparkles_anim.png', VA + 'gold_victory_sparkles_anim.json');
+
+  // equation flash overlays
+  scene.load.image(GridAssets.EQ_1_PLUS_9,  EQ + 'eq_1_plus_9.png');
+  scene.load.image(GridAssets.EQ_2_PLUS_8,  EQ + 'eq_2_plus_8.png');
+  scene.load.image(GridAssets.EQ_3_PLUS_7,  EQ + 'eq_3_plus_7.png');
+  scene.load.image(GridAssets.EQ_4_PLUS_6,  EQ + 'eq_4_plus_6.png');
+  scene.load.image(GridAssets.EQ_SUM_10,    EQ + 'eq_sum_10.png');
+  scene.load.image(GridAssets.EQ_1_PLUS_4,  EQ + 'eq_1_plus_4.png');
+  scene.load.image(GridAssets.EQ_2_PLUS_3,  EQ + 'eq_2_plus_3.png');
+  scene.load.image(GridAssets.EQ_1_PLUS_1,  EQ + 'eq_1_plus_1.png');
+  scene.load.image(GridAssets.EQ_2_PLUS_2,  EQ + 'eq_2_plus_2.png');
+  scene.load.image(GridAssets.EQ_3_PLUS_3,  EQ + 'eq_3_plus_3.png');
+  scene.load.image(GridAssets.EQ_4_PLUS_4,  EQ + 'eq_4_plus_4.png');
+  scene.load.image(GridAssets.EQ_11_PLUS_9, EQ + 'eq_11_plus_9.png');
+  scene.load.image(GridAssets.EQ_12_PLUS_8, EQ + 'eq_12_plus_8.png');
+  scene.load.image(GridAssets.EQ_13_PLUS_7, EQ + 'eq_13_plus_7.png');
+  scene.load.image(GridAssets.EQ_14_PLUS_6, EQ + 'eq_14_plus_6.png');
+
+  // tutorial gesture atlases
+  scene.load.atlas(GridAssets.HINT_SWIPE_RIGHT, TU + 'hint_swipe_right.png', TU + 'hint_swipe_right.json');
+  scene.load.atlas(GridAssets.HINT_TAP,         TU + 'hint_tap.png',         TU + 'hint_tap.json');
+
+  // blank stone buttons
+  scene.load.image(GridAssets.BTN_STONE_BLUE_BLANK,       U + 'button_stone_blue_blank.png');
+  scene.load.image(GridAssets.BTN_STONE_BLUE_BLANK_HOVER, U + 'button_stone_blue_blank_hover.png');
+  scene.load.image(GridAssets.BTN_STONE_GOLD_BLANK,       U + 'button_stone_gold_blank.png');
+  scene.load.image(GridAssets.BTN_STONE_GREEN_BLANK,      U + 'button_stone_green_blank.png');
+
+  // cinematic portraits
+  scene.load.image(GridAssets.PORTRAIT_BRAM_CINEMATIC, UC + 'portrait_bram_cinematic.png');
+  scene.load.image(GridAssets.PORTRAIT_NILO_CINEMATIC, UC + 'portrait_nilo_cinematic.png');
+  scene.load.image(GridAssets.PORTRAIT_OWL_CINEMATIC,  UC + 'portrait_owl_cinematic.png');
+
+  // character sprite atlases
+  scene.load.atlas(GridAssets.BRAM_ALMOST_ATLAS, SP + 'bram/almost/bram_almost_atlas.png',   SP + 'bram/almost/bram_almost_atlas.json');
+  scene.load.atlas(GridAssets.NILO_SPIRIT_IDLE,  SP + 'nilo/nilo_spirit_idle.png',           SP + 'nilo/nilo_spirit_idle.json');
+
+  // clocktower marsh tileset (second chapter — loaded now, used later)
+  scene.load.image(GridAssets.CM_TILE_WALL,         CM + 'tile_wall_marsh.png');
+  scene.load.image(GridAssets.CM_TILE_FLOOR,        CM + 'tile_floor_marsh.png');
+  scene.load.image(GridAssets.CM_TILE_FLOOR_ALT,    CM + 'tile_floor_marsh_alt.png');
+  scene.load.image(GridAssets.CM_EXIT_CLOSED,       CM + 'exit_closed_clocktower.png');
+  scene.load.image(GridAssets.CM_EXIT_OPEN,         CM + 'exit_open_clocktower.png');
+  scene.load.image(GridAssets.CM_SOCKET_UNLIT,      CM + 'socket_unlit_marsh.png');
+  scene.load.image(GridAssets.CM_SOCKET_LIT,        CM + 'socket_lit_marsh.png');
+  scene.load.image(GridAssets.CM_GATE_CLOSED,       CM + 'gate_closed_marsh.png');
+  scene.load.image(GridAssets.CM_GATE_OPEN,         CM + 'gate_open_marsh.png');
+  scene.load.image(GridAssets.CM_BRIDGE_PLANK,      CM + 'bridge_plank_marsh.png');
+  scene.load.image(GridAssets.CM_DECO_CATTAIL,      CM + 'deco_cattail.png');
+  scene.load.image(GridAssets.CM_DECO_LILYPAD,      CM + 'deco_lilypad.png');
+  scene.load.image(GridAssets.CM_DECO_GEAR_SMALL,   CM + 'deco_gear_small.png');
+  scene.load.image(GridAssets.CM_DECO_LANTERN_POST, CM + 'deco_lantern_post_marsh.png');
 }

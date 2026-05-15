@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { addButton, addPanel, addSmallText, addTitle } from '../game/ui';
+import { addButton, addPanel, addSmallText, addStoneButton, addTitle } from '../game/ui';
 import { Palette } from '../game/palette';
 import { chapters } from '../data/progression';
 import { RestorationProgressStrip } from '../game/ui/RestorationProgressStrip';
@@ -42,12 +42,15 @@ export class MenuScene extends Phaser.Scene {
     new RestorationProgressStrip(this, 360, 290, { cell: 52, gap: 16, showLabels: true });
 
     // --- Play panel ---
-    addPanel(this, 72, 360, 480, 320, 0.84);
+    addPanel(this, 72, 360, 480, 352, 0.84);
     addSmallText(this, 'Play', 104, 372, 22);
     this.addPanelHostPortrait(72 + 480 - 28, 360 + 28, GridAssets.PORTRAIT_BRAM);
     this.addSectionDivider(280, 408, 380);
 
-    addButton(this, '▶ Begin Story', 104, 420, 416, 58, () => this.startStory());
+    // Primary CTA — stone-frame button from Asset Pack 2. Center-coord API.
+    addStoneButton(this, '▶ Begin Story', 312, 449, 360, 64, 'blue',
+      () => this.startStory(),
+      { fontSize: 24, subtitle: 'A cozy math adventure' });
     addButton(this, 'Replay Vertical Slice', 104, 486, 416, 34, () => this.startSlice());
 
     addSmallText(this, 'Standalone demos', 104, 528, 17);
@@ -57,20 +60,20 @@ export class MenuScene extends Phaser.Scene {
     addButton(this, 'Platform', 244, 562, 130, 34, () => this.scene.start('PlatformScene'));
     addButton(this, 'Top-Down', 384, 562, 136, 34, () => this.scene.start('TopDownScene'));
     addButton(this, '◴ Clocktower Marsh: Tell Time', 104, 602, 416, 34, () => this.scene.start('ClockTowerScene'));
+    // Puzzle row 1 — logic + first number room
     addButton(this, '▦ Bridge',       104, 640,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'broken_bridge' }));
     addButton(this, '▦ Garden',       210, 640,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'stone_garden'  }));
     addButton(this, '▦ Numbers',      316, 640,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'number_gate'   }));
     addButton(this, '▦ Make 10',      422, 640,  98, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'make_10'       }));
 
-    // Reset progress: sprite back-icon + label if loaded, fallback otherwise
-    if (this.hasUiSprites()) {
-      this.addSpriteResetButton(104, 690);
-    } else {
-      addButton(this, 'Reset progress', 104, 690, 200, 22, () => {
-        GameProgress.reset();
-        this.scene.restart();
-      });
-    }
+    // Puzzle row 2 — sum_pair ladder
+    addButton(this, '▦ Make 5',       104, 678,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'make_5'        }));
+    addButton(this, '▦ Doubles',      210, 678,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'doubles'       }));
+    addButton(this, '▦ Make 20',      316, 678,  96, 34, () => this.scene.start('GridPuzzleLabScene', { roomId: 'make_20'       }));
+    addButton(this, '↺ Reset',        422, 678,  98, 34, () => {
+      GameProgress.reset();
+      this.scene.restart();
+    });
 
     // --- Chapter spine ---
     addPanel(this, 620, 360, 596, 320, 0.78);
@@ -88,9 +91,13 @@ export class MenuScene extends Phaser.Scene {
       });
     });
 
-    addSmallText(this, 'Keyboard: arrows/WASD to move, space to jump/select. Touch/mouse buttons work in menus.', 78, 706, 14);
+    addSmallText(this, 'Keyboard: arrows/WASD to move, space to jump/select. Touch/mouse buttons work in menus.', 78, 342, 13);
 
     this.addMuteToggle();
+
+    // Menu theme music — stop automatically when the scene is replaced.
+    AudioManager.loop(AudioKeys.MENU_THEME);
+    this.events.once('shutdown', () => AudioManager.stop(AudioKeys.MENU_THEME));
   }
 
   /**
@@ -189,21 +196,6 @@ export class MenuScene extends Phaser.Scene {
       .setDepth(5);
   }
 
-  private addSpriteResetButton(x: number, y: number) {
-    const btn = this.add.image(x, y, GridAssets.BTN_RESET)
-      .setOrigin(0, 0.5).setScale(0.34).setAlpha(0.9);
-    const label = this.add.text(x + 50, y, 'Reset progress', {
-      fontFamily: 'Georgia, serif', fontSize: '16px', color: '#f0dcae'
-    }).setOrigin(0, 0.5);
-    const hit = this.add.zone(x, y, 210, 36)
-      .setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
-    hit.on('pointerover', () => { btn.setScale(0.38); label.setScale(1.04); });
-    hit.on('pointerout',  () => { btn.setScale(0.34); label.setScale(1);    });
-    hit.on('pointerdown', () => {
-      GameProgress.reset();
-      this.scene.restart();
-    });
-  }
 
   // ─── flow ────────────────────────────────────────────────────────────────
 

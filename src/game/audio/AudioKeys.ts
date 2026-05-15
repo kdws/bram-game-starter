@@ -33,6 +33,7 @@ export const AudioKeys = {
 
   // ─── Music / ambient ──────────────────────────────────────────────────
   AMBIENT_RATTLEWOOD: 'audio_ambient_rattlewood',
+  MENU_THEME:         'audio_menu_theme',
 } as const;
 
 export type AudioKey = (typeof AudioKeys)[keyof typeof AudioKeys];
@@ -57,4 +58,5 @@ export const AUDIO_CATEGORY: Record<string, AudioCategory> = {
   [AudioKeys.SUCCESS_WARM]:       'sfx',
   [AudioKeys.NILO_ENERGY]:        'sfx',
   [AudioKeys.AMBIENT_RATTLEWOOD]: 'music',
+  [AudioKeys.MENU_THEME]:         'music',
 };

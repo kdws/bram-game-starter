@@ -42,7 +42,9 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
   // Sprite layers
   private staticTileImages: Phaser.GameObjects.Image[] = [];
-  private dynamicCellImages: Phaser.GameObjects.Image[] = [];
+  // Dynamic cells may include Text badges (fallback for stones/sockets
+  // with values that lack dedicated art), so the widest type is GameObject.
+  private dynamicCellImages: Phaser.GameObjects.GameObject[] = [];
 
   private bram!: Bram;
   private hudInventory!: Phaser.GameObjects.Text;
@@ -57,6 +59,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   private moveCount = 0;
   private pointerStart: { x: number; y: number } | null = null;
   private room: PuzzleRoom = PUZZLE_ROOMS[DEFAULT_ROOM_ID];
+  private tutorialObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() { super('GridPuzzleLabScene'); }
 
@@ -74,6 +77,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.staticTileImages = [];
     this.dynamicCellImages = [];
     this.tipBannerImg = null;
+    this.tutorialObjects = [];
   }
 
   // ─── lifecycle ───────────────────────────────────────────────────────────
@@ -117,9 +121,95 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.buildTouchControls();
     this.refreshHUD();
 
+    this.registerVfxAnimations();
+    this.maybeShowGestureTutorial();
+
     // Start cozy ambient pad for puzzle play. Already-running loops are
     // a no-op inside AudioManager.
     AudioManager.loop(AudioKeys.AMBIENT_RATTLEWOOD);
+  }
+
+  // ─── animation setup ─────────────────────────────────────────────────────
+
+  private registerVfxAnimations() {
+    const defs: Array<{ key: string; prefix: string; count: number; frameRate: number }> = [
+      { key: GridAssets.VFX_BLUE_PICKUP_ANIM,  prefix: 'blue_pickup_sparkles_anim_',  count: 6, frameRate: 14 },
+      { key: GridAssets.VFX_BLUE_BURST_ANIM,   prefix: 'blue_repair_burst_anim_',     count: 6, frameRate: 14 },
+      { key: GridAssets.VFX_GOLD_VICTORY_ANIM, prefix: 'gold_victory_sparkles_anim_', count: 6, frameRate: 12 },
+      { key: GridAssets.HINT_SWIPE_RIGHT,       prefix: 'hint_swipe_right_',           count: 6, frameRate: 8  },
+      { key: GridAssets.HINT_TAP,               prefix: 'hint_tap_',                   count: 6, frameRate: 10 },
+    ];
+    for (const { key, prefix, count, frameRate } of defs) {
+      if (!this.textures.exists(key) || this.anims.exists(key)) continue;
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNames(key, {
+          prefix, start: 1, end: count, zeroPad: 4, suffix: '.png'
+        }),
+        frameRate,
+        repeat: 0
+      });
+    }
+  }
+
+  /**
+   * First-time gesture tutorial: shows a looping swipe-right finger and a
+   * tap-with-ripple over the d-pad area, with a small "Swipe or tap" label.
+   * Persists dismissal in localStorage so it only shows once across sessions.
+   * Auto-dismisses when the player makes their first successful move.
+   */
+  private maybeShowGestureTutorial() {
+    if (!this.spritesReady()) return;
+    if (!this.textures.exists(GridAssets.HINT_SWIPE_RIGHT)) return;
+
+    const LS_KEY = 'bram.tutorial.gestures.shown';
+    try {
+      if (localStorage.getItem(LS_KEY) === 'true') return;
+    } catch { /* storage unavailable — show anyway */ }
+
+    // Position over the d-pad zone (1090, 380) — that's where touch users
+    // are already looking and where the finger gestures make sense.
+    const cx = 1090;
+    const cy = 480;
+
+    const swipe = this.add.sprite(cx - 36, cy, GridAssets.HINT_SWIPE_RIGHT)
+      .setScale(0.85).setDepth(60).setAlpha(0);
+    swipe.play({ key: GridAssets.HINT_SWIPE_RIGHT, repeat: -1 });
+
+    const tap = this.add.sprite(cx + 36, cy, GridAssets.HINT_TAP)
+      .setScale(0.85).setDepth(60).setAlpha(0);
+    tap.play({ key: GridAssets.HINT_TAP, repeat: -1 });
+
+    const label = this.add.text(cx, cy + 64, 'Swipe or tap to move', {
+      fontFamily: 'Georgia, serif', fontSize: '14px',
+      color: '#ffe9ad', fontStyle: 'italic',
+      shadow: { offsetX: 1, offsetY: 1, color: '#000', blur: 3, fill: true }
+    }).setOrigin(0.5).setDepth(60).setAlpha(0);
+
+    this.tutorialObjects = [swipe, tap, label];
+
+    // Fade in, then gently pulse the label so it stays alive but unobtrusive.
+    this.tweens.add({
+      targets: this.tutorialObjects,
+      alpha: 0.92, duration: 360, ease: 'Quad.easeOut', delay: 600
+    });
+    this.tweens.add({
+      targets: label, alpha: 0.65, duration: 1400,
+      yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 1200
+    });
+
+    try { localStorage.setItem(LS_KEY, 'true'); } catch { /* ignore */ }
+  }
+
+  private dismissGestureTutorial() {
+    if (this.tutorialObjects.length === 0) return;
+    const objs = this.tutorialObjects;
+    this.tutorialObjects = [];
+    this.tweens.killTweensOf(objs);
+    this.tweens.add({
+      targets: objs, alpha: 0, duration: 240, ease: 'Quad.easeIn',
+      onComplete: () => { for (const o of objs) o.destroy(); }
+    });
   }
 
   // ─── grid sprite layers ───────────────────────────────────────────────────
@@ -233,8 +323,8 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
   private makeCellSprites(
     cx: number, cy: number, cell: CellType, gx: number, gy: number
-  ): Phaser.GameObjects.Image[] {
-    const out: Phaser.GameObjects.Image[] = [];
+  ): Phaser.GameObjects.GameObject[] {
+    const out: Phaser.GameObjects.GameObject[] = [];
 
     // Each cell sits on a floor tile first
     const floorKey = (gx + gy) % 2 === 0 ? GridAssets.FLOOR : GridAssets.FLOOR_ALT;
@@ -248,11 +338,14 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         const key = cellValue !== undefined
           ? `grid_number_stone_${cellValue}`
           : GridAssets.REPAIR_STONE;
-        const img = this.textures.exists(key)
-          ? this.add.image(cx, cy + 2, key)
-          : this.add.image(cx, cy + 2, GridAssets.REPAIR_STONE);
-        img.setScale(SC_STONE).setDepth(4);
+        const hasArt = this.textures.exists(key);
+        const img = this.add.image(cx, cy + 2, hasArt ? key : GridAssets.REPAIR_STONE)
+          .setScale(SC_STONE).setDepth(4);
         out.push(img);
+        // Fallback badge for values without dedicated art (e.g. 11+).
+        if (cellValue !== undefined && !hasArt) {
+          out.push(this.makeNumberBadge(cx, cy + 2, cellValue, '#fff2d4').setDepth(5));
+        }
         break;
       }
 
@@ -260,11 +353,13 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         const key = cellValue !== undefined
           ? `grid_socket_unlit_${cellValue}`
           : GridAssets.SOCKET_EMPTY;
-        const img = this.textures.exists(key)
-          ? this.add.image(cx, cy, key)
-          : this.add.image(cx, cy, GridAssets.SOCKET_EMPTY);
-        img.setScale(SC_SOCKET).setDepth(3);
+        const hasArt = this.textures.exists(key);
+        const img = this.add.image(cx, cy, hasArt ? key : GridAssets.SOCKET_EMPTY)
+          .setScale(SC_SOCKET).setDepth(3);
         out.push(img);
+        if (cellValue !== undefined && !hasArt) {
+          out.push(this.makeNumberBadge(cx, cy, cellValue, '#c8e6ff').setDepth(4));
+        }
         break;
       }
 
@@ -272,16 +367,18 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         const key = cellValue !== undefined
           ? `grid_socket_lit_${cellValue}`
           : GridAssets.SOCKET_FILLED;
-        const filled = this.textures.exists(key)
-          ? this.add.image(cx, cy, key)
-          : this.add.image(cx, cy, GridAssets.SOCKET_FILLED);
-        filled.setScale(SC_SOCKET).setDepth(3);
+        const hasArt = this.textures.exists(key);
+        const filled = this.add.image(cx, cy, hasArt ? key : GridAssets.SOCKET_FILLED)
+          .setScale(SC_SOCKET).setDepth(3);
         // gentle pulse to show active repair energy
         this.tweens.add({
           targets: filled, alpha: 0.75, duration: 900,
           yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
         });
         out.push(filled);
+        if (cellValue !== undefined && !hasArt) {
+          out.push(this.makeNumberBadge(cx, cy, cellValue, '#eaf6ff').setDepth(4));
+        }
         break;
       }
 
@@ -312,6 +409,21 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     }
 
     return out;
+  }
+
+  /**
+   * Number badge rendered as a Text object, used when a tile carries a
+   * value but no dedicated sprite exists (e.g. stones/sockets with value
+   * 11+). Style is consistent with the baked numerals on 1–10 art.
+   */
+  private makeNumberBadge(cx: number, cy: number, value: number, color: string) {
+    return this.add.text(cx, cy, String(value), {
+      fontFamily: 'Georgia, serif',
+      fontSize: value > 9 ? '13px' : '15px',
+      fontStyle: 'bold',
+      color,
+      shadow: { offsetX: 1, offsetY: 1, color: '#000', blur: 2, fill: true }
+    }).setOrigin(0.5);
   }
 
   /**
@@ -703,6 +815,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
     this.moveCount += 1;
     this.busy = true;
+    if (this.tutorialObjects.length > 0) this.dismissGestureTutorial();
 
     // Audio cues that should fire on commit (not after tween):
     if (result.pushedBlock)    AudioManager.play(AudioKeys.BLOCK_PUSH);
@@ -729,6 +842,9 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         this.busy = false;
         if (result.collectedStone) this.spawnPickupSparkle(target.x, target.y);
         if (result.filledSocket)   this.spawnRepairBurst(target.x, target.y);
+        if (result.filledSocket && result.pairUsed) {
+          this.spawnEquationFlash(target.x, target.y, result.pairUsed[0], result.pairUsed[1]);
+        }
         if (result.solved)         this.showSuccess();
       }
     });
@@ -829,8 +945,12 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   }
 
   private spawnPickupSparkle(x: number, y: number) {
-    if (this.spritesReady()) {
-      // Sprite VFX: blue sparkle bursting upward from pickup point
+    if (this.spritesReady() && this.textures.exists(GridAssets.VFX_BLUE_PICKUP_ANIM)) {
+      const s = this.add.sprite(x, y + 4, GridAssets.VFX_BLUE_PICKUP_ANIM)
+        .setScale(0.35).setDepth(50).setAlpha(0.95);
+      s.play(GridAssets.VFX_BLUE_PICKUP_ANIM);
+      s.once('animationcomplete', () => s.destroy());
+    } else if (this.spritesReady()) {
       const s = this.add.image(x, y + 4, GridAssets.VFX_BLUE_PICKUP)
         .setScale(0.35).setDepth(50).setAlpha(0.95);
       this.tweens.add({
@@ -855,8 +975,12 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   }
 
   private spawnRepairBurst(x: number, y: number) {
-    if (this.spritesReady()) {
-      // Burst image expands and fades
+    if (this.spritesReady() && this.textures.exists(GridAssets.VFX_BLUE_BURST_ANIM)) {
+      const s = this.add.sprite(x, y, GridAssets.VFX_BLUE_BURST_ANIM)
+        .setScale(0.32).setDepth(45).setAlpha(0.92);
+      s.play(GridAssets.VFX_BLUE_BURST_ANIM);
+      s.once('animationcomplete', () => s.destroy());
+    } else if (this.spritesReady()) {
       const burst = this.add.image(x, y, GridAssets.VFX_BLUE_BURST)
         .setScale(0.22).setDepth(45).setAlpha(0.9);
       this.tweens.add({
@@ -916,23 +1040,37 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     }
 
     // Gold victory sparkles across the screen
+    const useAnim = this.spritesReady() && this.textures.exists(GridAssets.VFX_GOLD_VICTORY_ANIM);
     for (let i = 0; i < 8; i++) {
       const sx = Phaser.Math.Between(300, 980);
       const sy = Phaser.Math.Between(180, 520);
-      const key = this.spritesReady()
-        ? (i % 2 === 0 ? GridAssets.VFX_GOLD_VICTORY : GridAssets.VFX_GOLD_SHOWER)
-        : null;
+      const spawnDelay = i * 80;
 
-      if (key) {
+      if (useAnim) {
+        const s = this.add.sprite(sx, sy, GridAssets.VFX_GOLD_VICTORY_ANIM)
+          .setScale(Phaser.Math.FloatBetween(0.30, 0.54))
+          .setDepth(depth + 2).setAlpha(0);
+        this.tweens.add({
+          targets: s, alpha: 0.9, y: sy - 20,
+          duration: 300, delay: spawnDelay, ease: 'Quad.easeOut',
+          onComplete: () => {
+            s.play(GridAssets.VFX_GOLD_VICTORY_ANIM);
+            s.once('animationcomplete', () => {
+              this.tweens.add({ targets: s, alpha: 0, duration: 300, onComplete: () => s.destroy() });
+            });
+          }
+        });
+      } else if (this.spritesReady()) {
+        const key = i % 2 === 0 ? GridAssets.VFX_GOLD_VICTORY : GridAssets.VFX_GOLD_SHOWER;
         const s = this.add.image(sx, sy, key)
           .setScale(Phaser.Math.FloatBetween(0.18, 0.34))
           .setDepth(depth + 2).setAlpha(0);
         this.tweens.add({
           targets: s, alpha: 0.9, y: sy - 28,
-          duration: 800, delay: i * 80, ease: 'Quad.easeOut'
+          duration: 800, delay: spawnDelay, ease: 'Quad.easeOut'
         });
         this.tweens.add({
-          targets: s, alpha: 0, delay: 800 + i * 80, duration: 600,
+          targets: s, alpha: 0, delay: 800 + spawnDelay, duration: 600,
           onComplete: () => s.destroy()
         });
       } else {
@@ -945,6 +1083,67 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         this.tweens.add({ targets: star, alpha: 0, delay: 900 + i * 70, duration: 600, onComplete: () => star.destroy() });
       }
     }
+  }
+
+  /**
+   * Flash an equation overlay above the socket just filled. Uses the
+   * pre-rendered art for canonical Make-10 pairs; everything else (other
+   * sums, doubles, larger numbers) gets a procedural chalkboard-style
+   * text bubble so the equation always reads correctly.
+   */
+  private spawnEquationFlash(wx: number, wy: number, stoneA: number, stoneB: number) {
+    const lo = Math.min(stoneA, stoneB);
+    const hi = Math.max(stoneA, stoneB);
+    const sum = stoneA + stoneB;
+
+    let artKey: string | null = null;
+    if (lo === hi) {
+      // Doubles
+      if      (lo === 1) artKey = GridAssets.EQ_1_PLUS_1;
+      else if (lo === 2) artKey = GridAssets.EQ_2_PLUS_2;
+      else if (lo === 3) artKey = GridAssets.EQ_3_PLUS_3;
+      else if (lo === 4) artKey = GridAssets.EQ_4_PLUS_4;
+    } else if (sum === 5) {
+      if      (lo === 1 && hi === 4) artKey = GridAssets.EQ_1_PLUS_4;
+      else if (lo === 2 && hi === 3) artKey = GridAssets.EQ_2_PLUS_3;
+    } else if (sum === 10) {
+      if      (lo === 1 && hi === 9) artKey = GridAssets.EQ_1_PLUS_9;
+      else if (lo === 2 && hi === 8) artKey = GridAssets.EQ_2_PLUS_8;
+      else if (lo === 3 && hi === 7) artKey = GridAssets.EQ_3_PLUS_7;
+      else if (lo === 4 && hi === 6) artKey = GridAssets.EQ_4_PLUS_6;
+    } else if (sum === 20) {
+      if      (lo === 9  && hi === 11) artKey = GridAssets.EQ_11_PLUS_9;
+      else if (lo === 8  && hi === 12) artKey = GridAssets.EQ_12_PLUS_8;
+      else if (lo === 7  && hi === 13) artKey = GridAssets.EQ_13_PLUS_7;
+      else if (lo === 6  && hi === 14) artKey = GridAssets.EQ_14_PLUS_6;
+    }
+
+    const startY = wy - TILE;
+    let target: Phaser.GameObjects.Image | Phaser.GameObjects.Text;
+    if (this.spritesReady() && artKey && this.textures.exists(artKey)) {
+      target = this.add.image(wx, startY, artKey)
+        .setScale(0.8).setDepth(55).setAlpha(0);
+    } else {
+      target = this.add.text(wx, startY, `${lo} + ${hi} = ${sum}`, {
+        fontFamily: 'Georgia, serif', fontSize: '20px',
+        color: '#fff2d4', fontStyle: 'bold',
+        backgroundColor: '#2a1f12',
+        padding: { x: 14, y: 6 },
+        shadow: { offsetX: 1, offsetY: 2, color: '#000', blur: 3, fill: true }
+      }).setOrigin(0.5).setDepth(55).setAlpha(0);
+    }
+
+    this.tweens.add({
+      targets: target, alpha: 1, y: startY - 8,
+      duration: 200, ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: target, alpha: 0, y: startY - 28,
+          duration: 400, delay: 700, ease: 'Quad.easeIn',
+          onComplete: () => target.destroy()
+        });
+      }
+    });
   }
 
   private showSuccessSprite(depth: number) {

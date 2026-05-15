@@ -74,6 +74,12 @@ export interface MoveResult {
   numberMismatch: boolean;
   /** The numbered value involved in the last pickup / fill / mismatch. */
   numberValue: number | null;
+  /**
+   * When a sum_pair socket was filled, the two stone values consumed.
+   * Null for all other moves. Used by the scene to pick the right equation
+   * overlay (e.g. "1 + 9 = 10").
+   */
+  pairUsed: [number, number] | null;
 }
 
 /**

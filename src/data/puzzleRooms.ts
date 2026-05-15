@@ -187,6 +187,144 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
       bramLine: '"I counted right."',
     },
   },
+
+  // ─── Math ladder (v0.6) — three sum_pair variants that warm up to and
+  // extend the Make 10 mechanic. All share the same grid shape as Make 10
+  // so players read the layout once and focus on the numbers.
+  // ──────────────────────────────────────────────────────────────────────
+
+  make_5: {
+    id: 'make_5',
+    title: 'Puzzle Lab: Make 5',
+    map: `
+##############
+#B...........#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o..E#
+##############
+`,
+    numbered: {
+      // Left column 1..4
+      '2,2': { kind: 'stone',  value: 1 },
+      '2,4': { kind: 'stone',  value: 2 },
+      '2,6': { kind: 'stone',  value: 3 },
+      '2,8': { kind: 'stone',  value: 4 },
+      // Middle column mirrored so each row pairs to 5
+      '6,2': { kind: 'stone',  value: 4 },
+      '6,4': { kind: 'stone',  value: 3 },
+      '6,6': { kind: 'stone',  value: 2 },
+      '6,8': { kind: 'stone',  value: 1 },
+      '8,2': { kind: 'socket', value: 5, acceptMode: 'sum_pair' },
+      '8,4': { kind: 'socket', value: 5, acceptMode: 'sum_pair' },
+      '8,6': { kind: 'socket', value: 5, acceptMode: 'sum_pair' },
+      '8,8': { kind: 'socket', value: 5, acceptMode: 'sum_pair' },
+    },
+    gateVisual: 'gate',
+    hints: {
+      welcome:        'Each socket wants two stones that add up to 5.',
+      firstUndo:      'Good — undo lets you put a stone back and try again.',
+      numberMismatch: "Those two stones don't add to 5. Try a different pair.",
+    },
+    success: {
+      title:    'Five every time.',
+      niloLine: '"Small sums still count."',
+      bramLine: '"One and four. Two and three."',
+    },
+  },
+
+  doubles: {
+    id: 'doubles',
+    title: 'Puzzle Lab: Doubles',
+    map: `
+##############
+#B...........#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o..E#
+##############
+`,
+    numbered: {
+      // Two of each: 1, 2, 3, 4 — left and middle columns mirror.
+      '2,2': { kind: 'stone',  value: 1 },
+      '2,4': { kind: 'stone',  value: 2 },
+      '2,6': { kind: 'stone',  value: 3 },
+      '2,8': { kind: 'stone',  value: 4 },
+      '6,2': { kind: 'stone',  value: 1 },
+      '6,4': { kind: 'stone',  value: 2 },
+      '6,6': { kind: 'stone',  value: 3 },
+      '6,8': { kind: 'stone',  value: 4 },
+      // Sockets ascend by 2 — the doubled value of each stone pair.
+      '8,2': { kind: 'socket', value: 2, acceptMode: 'sum_pair' },
+      '8,4': { kind: 'socket', value: 4, acceptMode: 'sum_pair' },
+      '8,6': { kind: 'socket', value: 6, acceptMode: 'sum_pair' },
+      '8,8': { kind: 'socket', value: 8, acceptMode: 'sum_pair' },
+    },
+    gateVisual: 'gate',
+    hints: {
+      welcome:        'Each socket wants two matching stones — a number plus itself.',
+      firstUndo:      'Good — try pairing stones that look alike.',
+      numberMismatch: "These don't pair up here. Look for two stones with the same value.",
+    },
+    success: {
+      title:    'Each one, twice.',
+      niloLine: '"Twins find each other."',
+      bramLine: '"Double makes it whole."',
+    },
+  },
+
+  // Make 20 with carries — pairs all cross the 10s boundary.
+  make_20: {
+    id: 'make_20',
+    title: 'Puzzle Lab: Make 20',
+    map: `
+##############
+#B...........#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o....#
+#............#
+#.s...s.o..E#
+##############
+`,
+    numbered: {
+      // Left column: teens — each is "ten and a bit".
+      '2,2': { kind: 'stone',  value: 11 },
+      '2,4': { kind: 'stone',  value: 12 },
+      '2,6': { kind: 'stone',  value: 13 },
+      '2,8': { kind: 'stone',  value: 14 },
+      // Middle column: the "bit you'd need to bridge to 20".
+      '6,2': { kind: 'stone',  value: 9 },
+      '6,4': { kind: 'stone',  value: 8 },
+      '6,6': { kind: 'stone',  value: 7 },
+      '6,8': { kind: 'stone',  value: 6 },
+      '8,2': { kind: 'socket', value: 20, acceptMode: 'sum_pair' },
+      '8,4': { kind: 'socket', value: 20, acceptMode: 'sum_pair' },
+      '8,6': { kind: 'socket', value: 20, acceptMode: 'sum_pair' },
+      '8,8': { kind: 'socket', value: 20, acceptMode: 'sum_pair' },
+    },
+    gateVisual: 'gate',
+    hints: {
+      welcome:        'Each socket wants two stones that add up to 20. Think tens.',
+      firstUndo:      'Good — try thinking of 13 as ten and three.',
+      numberMismatch: "Those two stones don't reach 20 yet. Try a bigger partner.",
+    },
+    success: {
+      title:    'All four reach twenty.',
+      niloLine: '"You crossed the ten."',
+      bramLine: "\"Ten and ten — that's all it ever was.\"",
+    },
+  },
 };
 
 export const DEFAULT_ROOM_ID = 'broken_bridge';
