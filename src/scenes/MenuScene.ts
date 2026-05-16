@@ -95,9 +95,14 @@ export class MenuScene extends Phaser.Scene {
 
     this.addMuteToggle();
 
-    // Menu theme music — stop automatically when the scene is replaced.
-    AudioManager.loop(AudioKeys.MENU_THEME);
-    this.events.once('shutdown', () => AudioManager.stop(AudioKeys.MENU_THEME));
+    // Soft fade-in pairs with the puzzle scene's fade-out for a seamless
+    // return; safe on first entry too (just fades from black on cold boot).
+    this.cameras.main.fadeIn(360, 0, 0, 0);
+
+    // Menu theme music — fade in on entry, fade out on shutdown so the
+    // transition into a puzzle isn't an abrupt cut.
+    AudioManager.fadeIn(AudioKeys.MENU_THEME, 600);
+    this.events.once('shutdown', () => AudioManager.fadeOut(AudioKeys.MENU_THEME, 300));
   }
 
   /**

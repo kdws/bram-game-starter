@@ -86,6 +86,13 @@ export interface MoveResult {
   /** The first deposited value on a sum_pair partial socket, if applicable. */
   partialValue: number | null;
   /**
+   * Stone value Bram tried to deposit when numberMismatch fires. For a
+   * sum_pair partial mismatch this is the second stone that didn't complete
+   * the pair (so the scene can say "3 + 8 is 11, not 10"). Null on other
+   * results.
+   */
+  attemptedValue: number | null;
+  /**
    * When a sum_pair socket was filled, the two stone values consumed.
    * Null for all other moves. Used by the scene to pick the right equation
    * overlay (e.g. "1 + 9 = 10").

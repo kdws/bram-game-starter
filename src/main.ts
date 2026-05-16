@@ -45,4 +45,10 @@ const config: Phaser.Types.Core.GameConfig = {
   ]
 };
 
-new Phaser.Game(config);
+const phaserGame = new Phaser.Game(config);
+
+// Dev-only window hook so scene state can be inspected from the console
+// (preview tools, manual debugging). Tree-shaken from production builds.
+if (import.meta.env.DEV) {
+  (window as unknown as { game: Phaser.Game }).game = phaserGame;
+}

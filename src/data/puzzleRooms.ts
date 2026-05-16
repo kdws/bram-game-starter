@@ -334,3 +334,25 @@ export const PUZZLE_ROOMS: Record<string, PuzzleRoom> = {
 };
 
 export const DEFAULT_ROOM_ID = 'broken_bridge';
+
+/**
+ * Recommended play order. Drives the "Next puzzle" button on the success
+ * screen so the child can step through the math ladder without returning
+ * to the menu. Rooms not listed here have no successor (Next button hides).
+ */
+export const PUZZLE_PROGRESSION: readonly string[] = [
+  'broken_bridge',
+  'stone_garden',
+  'number_gate',
+  'make_5',
+  'doubles',
+  'make_10',
+  'make_20',
+];
+
+/** Returns the next room id in PUZZLE_PROGRESSION, or null if at the end. */
+export function getNextRoomId(currentId: string): string | null {
+  const i = PUZZLE_PROGRESSION.indexOf(currentId);
+  if (i < 0 || i >= PUZZLE_PROGRESSION.length - 1) return null;
+  return PUZZLE_PROGRESSION[i + 1];
+}

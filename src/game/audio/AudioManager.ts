@@ -118,6 +118,61 @@ export class AudioManager {
     AudioManager.loops.clear();
   }
 
+  /**
+   * Fade out a tracked loop over `duration` ms, then stop it. No-ops if the
+   * loop isn't playing. The fade is driven by Phaser's global tween manager
+   * via the game's scene system so it survives scene transitions.
+   */
+  static fadeOut(key: string, duration = 400): void {
+    const snd = AudioManager.loops.get(key);
+    if (!snd || !snd.isPlaying) return;
+    const startVol = (snd as Phaser.Sound.WebAudioSound).volume ?? 1;
+    const scene = AudioManager.activeScene();
+    if (!scene || !('setVolume' in snd)) {
+      try { snd.stop(); } catch { /* ignore */ }
+      return;
+    }
+    scene.tweens.addCounter({
+      from: startVol, to: 0, duration, ease: 'Sine.easeIn',
+      onUpdate: (tw) => {
+        const v = tw.getValue() ?? 0;
+        try { (snd as Phaser.Sound.WebAudioSound).setVolume(v); } catch { /* ignore */ }
+      },
+      onComplete: () => {
+        try { snd.stop(); } catch { /* ignore */ }
+        // Restore stored volume so the next loop() starts at the right level.
+        try { (snd as Phaser.Sound.WebAudioSound).setVolume(startVol); } catch { /* ignore */ }
+      }
+    });
+  }
+
+  /**
+   * Start (or resume) a loop and fade its volume from 0 → bus volume over
+   * `duration` ms. Use for music transitions where an abrupt cut would feel
+   * harsh.
+   */
+  static fadeIn(key: string, duration = 600, options: PlayOptions = {}): void {
+    if (!AudioManager.canPlay(key)) return;
+    const scene = AudioManager.activeScene();
+    AudioManager.loop(key, { ...options, volume: 0 });
+    const snd = AudioManager.loops.get(key);
+    if (!snd || !scene || !('setVolume' in snd)) return;
+    const targetVol = AudioManager.resolveVolume(key, options.volume);
+    scene.tweens.addCounter({
+      from: 0, to: targetVol, duration, ease: 'Sine.easeOut',
+      onUpdate: (tw) => {
+        const v = tw.getValue() ?? 0;
+        try { (snd as Phaser.Sound.WebAudioSound).setVolume(v); } catch { /* ignore */ }
+      }
+    });
+  }
+
+  /** Pick any currently-running scene to host tweens. Falls back to null. */
+  private static activeScene(): Phaser.Scene | null {
+    const scenes = AudioManager.game?.scene?.getScenes(true);
+    return scenes && scenes.length > 0 ? scenes[0] : null;
+  }
+
   // ─── mute / volume ─────────────────────────────────────────────────────
 
   static isMuted(): boolean { return AudioManager.muted; }

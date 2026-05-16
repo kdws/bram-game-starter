@@ -99,6 +99,46 @@ export class GridPuzzleEngine {
     return this.state.partialSocketValues[`${x},${y}`];
   }
 
+  /**
+   * Whether Bram could fully complete the socket at (x,y) with his current
+   * inventory. Used by the scene to add a "you have the right stones" glow
+   * to sockets the player can finish. False for non-socket cells.
+   *
+   *  - exact socket: true if the matching value is in numberedCarried.
+   *  - sum_pair empty: true if any two carried stones sum to the target.
+   *  - sum_pair partial: true if the exact partner (target - first) is held.
+   *  - plain socket: true if at least one generic stone is held.
+   */
+  canCompleteSocket(x: number, y: number): boolean {
+    const cell = this.getCell(x, y);
+    if (cell !== 'socket_empty' && cell !== 'socket_partial') return false;
+    const key = `${x},${y}`;
+    const value = this.state.cellValues[key];
+
+    if (value === undefined) {
+      // plain socket
+      return this.state.stonesCarried > 0;
+    }
+    const mode = this.state.cellAcceptModes[key] ?? 'exact';
+
+    if (cell === 'socket_partial') {
+      const first = this.state.partialSocketValues[key];
+      if (first === undefined) return false;
+      return this.state.numberedCarried.includes(value - first);
+    }
+    if (mode === 'exact') {
+      return this.state.numberedCarried.includes(value);
+    }
+    // sum_pair empty — need a pair summing to value
+    const c = this.state.numberedCarried;
+    for (let i = 0; i < c.length; i++) {
+      for (let j = i + 1; j < c.length; j++) {
+        if (c[i] + c[j] === value) return true;
+      }
+    }
+    return false;
+  }
+
   getCell(x: number, y: number): CellType {
     if (y < 0 || y >= this.state.grid.length) return 'wall';
     const row = this.state.grid[y];
@@ -168,6 +208,7 @@ export class GridPuzzleEngine {
       numberMismatch: false,
       numberValue: null,
       partialValue: null,
+      attemptedValue: null,
       pairUsed: null
     };
 
@@ -304,6 +345,7 @@ export class GridPuzzleEngine {
         result.numberMismatch = true;
         result.numberValue = targetValue;
         result.partialValue = first;
+        result.attemptedValue = second;
         if (mutated) this.undoStack.push(snapshot);
         return result;
       }

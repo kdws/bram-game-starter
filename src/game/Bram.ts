@@ -242,6 +242,31 @@ export class Bram extends Phaser.GameObjects.Container {
     this.scene.time.delayedCall(500, () => this.setWarmGlow(false));
   }
 
+  /**
+   * Quick "stoop and stand" wobble used when Bram picks up a stone or
+   * places one into a socket. Tween-based so it works for both the sprite
+   * and procedural modes without needing a dedicated animation key. Safe
+   * to call mid-movement — uses scaleY/scaleX deltas off the current value.
+   */
+  pickupBob() {
+    const baseScaleY = this.scaleY;
+    const baseScaleX = this.scaleX;
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.add({
+      targets: this,
+      scaleY: baseScaleY * 0.86,
+      scaleX: baseScaleX * 1.08,
+      duration: 110,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onYoyo: () => { this.scaleY = baseScaleY; this.scaleX = baseScaleX; },
+      onComplete: () => { this.scaleY = baseScaleY; this.scaleX = baseScaleX; }
+    });
+    // Tiny gold flash to make the moment feel deliberate.
+    this.setWarmGlow(true);
+    this.scene.time.delayedCall(180, () => this.setWarmGlow(false));
+  }
+
   fallApart() {
     AudioManager.play(AudioKeys.BRAM_FALL_APART);
     if (this.sprite) {

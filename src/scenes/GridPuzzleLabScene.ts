@@ -5,7 +5,7 @@ import { GridPuzzleEngine } from '../game/grid/GridPuzzleEngine';
 import { CellType, Direction } from '../game/grid/GridTypes';
 import { addPanel } from '../game/ui';
 import { GridAssets } from '../game/assets/GridAssetKeys';
-import { PUZZLE_ROOMS, DEFAULT_ROOM_ID, PuzzleRoom } from '../data/puzzleRooms';
+import { PUZZLE_ROOMS, DEFAULT_ROOM_ID, PuzzleRoom, getNextRoomId } from '../data/puzzleRooms';
 import { AudioManager } from '../game/audio/AudioManager';
 import { AudioKeys } from '../game/audio/AudioKeys';
 
@@ -62,6 +62,8 @@ export class GridPuzzleLabScene extends Phaser.Scene {
   private room: PuzzleRoom = PUZZLE_ROOMS[DEFAULT_ROOM_ID];
   private tutorialObjects: Phaser.GameObjects.GameObject[] = [];
   private niloSpirit?: Phaser.GameObjects.Sprite;
+  /** Mini-orbs floating above Bram's head, one per carried numbered stone. */
+  private carriedOrbs: Phaser.GameObjects.GameObject[] = [];
 
   constructor() { super('GridPuzzleLabScene'); }
 
@@ -82,6 +84,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.tipBannerImg = null;
     this.tutorialObjects = [];
     this.niloSpirit = undefined;
+    this.carriedOrbs = [];
   }
 
   // ─── lifecycle ───────────────────────────────────────────────────────────
@@ -131,10 +134,18 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
     this.maybeShowGestureTutorial();
 
-    // Start cozy ambient pad for puzzle play. Already-running loops are
-    // a no-op inside AudioManager.
-    AudioManager.loop(AudioKeys.AMBIENT_RATTLEWOOD);
-    this.events.once('shutdown', () => AudioManager.stop(AudioKeys.AMBIENT_RATTLEWOOD));
+    // Render the floating carried-stone orbs (may already be non-empty if
+    // the player re-entered carrying stones — currently always empty, but
+    // safe either way).
+    this.renderCarriedOrbs();
+
+    // Cozy fade-in matches the menu's 400ms fade-out for a seamless entry.
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+
+    // Fade the ambient pad in; the menu theme has already faded out by
+    // the time we reach this scene.
+    AudioManager.fadeIn(AudioKeys.AMBIENT_RATTLEWOOD, 600);
+    this.events.once('shutdown', () => AudioManager.fadeOut(AudioKeys.AMBIENT_RATTLEWOOD, 400));
   }
 
   // ─── animation setup ─────────────────────────────────────────────────────
@@ -413,6 +424,10 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         if (cellValue !== undefined && !hasArt) {
           out.push(this.makeNumberBadge(cx, cy, cellValue, '#c8e6ff').setDepth(4));
         }
+        // "You have what this needs" hint — soft gold ring pulse.
+        if (this.engine.canCompleteSocket(gx, gy)) {
+          out.push(this.makeSocketHintGlow(cx, cy, false));
+        }
         break;
       }
 
@@ -428,6 +443,10 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         const target = cellValue;
         if (first !== undefined && target !== undefined) {
           out.push(this.makePartialBadge(cx, cy, first, target).setDepth(5));
+        }
+        // Stronger pulse when Bram has the exact partner stone in hand.
+        if (this.engine.canCompleteSocket(gx, gy)) {
+          out.push(this.makeSocketHintGlow(cx, cy, true));
         }
         break;
       }
@@ -510,6 +529,106 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     }).setOrigin(0.5);
     group.add([bg, label]);
     return group;
+  }
+
+  /**
+   * Soft pulsing ring drawn around a socket when Bram's current inventory
+   * is enough to complete it. `strong` doubles the glow brightness for the
+   * sum_pair partial case where Bram is carrying the exact partner stone.
+   */
+  private makeSocketHintGlow(cx: number, cy: number, strong: boolean) {
+    const g = this.add.graphics().setDepth(3.5);
+    const color = strong ? 0xffdf7a : 0xffe9ad;
+    const ringA = strong ? 0.95 : 0.7;
+    const ringB = strong ? 0.55 : 0.35;
+    g.lineStyle(2, color, ringA).strokeCircle(cx, cy, 19);
+    g.lineStyle(1, color, ringB).strokeCircle(cx, cy, 25);
+    this.tweens.add({
+      targets: g, alpha: strong ? 0.45 : 0.55,
+      duration: strong ? 520 : 800,
+      yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+    });
+    return g;
+  }
+
+  /**
+   * Re-render the floating orbs above Bram's head from the engine's current
+   * `numberedCarried` list. The LIFO-last orb is the one that will be
+   * deposited next — it pulses slightly larger and brighter so the player
+   * knows which stone is active. Safe to call on every move.
+   */
+  private renderCarriedOrbs() {
+    for (const o of this.carriedOrbs) o.destroy();
+    this.carriedOrbs = [];
+    if (!this.bram) return;
+    const carried = this.engine.numberedCarried;
+    if (carried.length === 0) return;
+
+    const baseY = this.bram.y - 70;
+    const spacing = 22;
+    const spread = (carried.length - 1) * spacing;
+    const startX = this.bram.x - spread / 2;
+
+    for (let i = 0; i < carried.length; i++) {
+      const x = startX + i * spacing;
+      const isActive = i === carried.length - 1;
+      const orb = this.makeCarriedOrb(x, baseY, carried[i], isActive);
+      // Fade-in so newly grabbed stones don't pop in harshly.
+      orb.setAlpha(0);
+      this.tweens.add({ targets: orb, alpha: 1, duration: 180, ease: 'Quad.easeOut' });
+      this.carriedOrbs.push(orb);
+    }
+  }
+
+  private makeCarriedOrb(x: number, y: number, value: number, isActive: boolean) {
+    const container = this.add.container(x, y).setDepth(11);
+    const stoneKey = `grid_number_stone_${value}`;
+    const baseScale = isActive ? 0.14 : 0.10;
+
+    if (this.textures.exists(stoneKey)) {
+      const img = this.add.image(0, 0, stoneKey).setScale(baseScale);
+      container.add(img);
+      if (isActive) {
+        this.tweens.add({
+          targets: img, scale: baseScale * 1.12,
+          yoyo: true, repeat: -1, duration: 720, ease: 'Sine.easeInOut'
+        });
+      }
+    } else {
+      const r = isActive ? 11 : 9;
+      const g = this.add.graphics();
+      g.fillStyle(0x1a2a3a, 0.55).fillEllipse(0, 5, r * 1.6, 4);
+      g.fillStyle(0x4a78a8, 1).fillCircle(0, 0, r);
+      g.fillStyle(0x6fb5e8, 1).fillCircle(0, 0, r - 2);
+      g.lineStyle(2, isActive ? 0xffe9ad : 0xc8e6ff, 1).strokeCircle(0, 0, r);
+      const t = this.add.text(0, 0, String(value), {
+        fontFamily: 'Georgia, serif',
+        fontSize: value > 9 ? '10px' : '11px',
+        fontStyle: 'bold',
+        color: isActive ? '#fff2d4' : '#eaf6ff',
+        shadow: { offsetX: 1, offsetY: 1, color: '#000', blur: 1, fill: true }
+      }).setOrigin(0.5);
+      container.add([g, t]);
+    }
+    return container;
+  }
+
+  /**
+   * Build a child-friendly mismatch tip that reads the actual math. For a
+   * sum_pair partial mismatch we know both the first stone (`partialValue`)
+   * and the rejected second (`attemptedValue`) so we can say "3 + 8 is 11,
+   * not 10." For exact mismatches we fall back to the room's static hint
+   * since there's no single "attempted" stone (any held stone failed).
+   */
+  private formatMismatchTip(
+    partialValue: number | null,
+    attemptedValue: number | null,
+    targetValue: number | null
+  ): string | null {
+    if (partialValue !== null && attemptedValue !== null && targetValue !== null) {
+      return `${partialValue} + ${attemptedValue} is ${partialValue + attemptedValue}, not ${targetValue}.`;
+    }
+    return this.room.hints.numberMismatch ?? null;
   }
 
   /**
@@ -897,9 +1016,19 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         const ty = this.engine.bram.y + (dir === 'up'   ? -1 : dir === 'down'  ? 1 : 0);
         this.flashRejectAt(tx, ty);
         this.pulseNilo();
-        if (!this.hasShownMismatchHint && this.room.hints.numberMismatch) {
+        // Specific-math tip when we can compute one ("3 + 8 is 11, not 10").
+        // Falls back to the static room hint when the engine couldn't
+        // identify the attempted stone (e.g. exact-mode empty-hand bump).
+        const specific = this.formatMismatchTip(
+          result.partialValue, result.attemptedValue, result.numberValue
+        );
+        // The specific tip is teaching and should always show. The generic
+        // room hint stays gated so it only appears once per room.
+        if (result.partialValue !== null && result.attemptedValue !== null) {
+          if (specific) this.setTip(specific);
+        } else if (!this.hasShownMismatchHint && specific) {
           this.hasShownMismatchHint = true;
-          this.setTip(this.room.hints.numberMismatch);
+          this.setTip(specific);
         }
       }
       return;
@@ -945,6 +1074,13 @@ export class GridPuzzleLabScene extends Phaser.Scene {
         if (result.filledSocket && result.pairUsed) {
           this.spawnEquationFlash(target.x, target.y, result.pairUsed[0], result.pairUsed[1]);
         }
+        // Bram does a quick "stoop and stand" wobble whenever something
+        // real happens with the inventory — pickup, partial deposit, or fill.
+        if (result.collectedStone || result.partialSocket || result.filledSocket) {
+          this.bram.pickupBob();
+        }
+        // Reposition the floating carried-stone orbs at Bram's new tile.
+        this.renderCarriedOrbs();
         if (result.solved)         this.showSuccess();
       }
     });
@@ -959,6 +1095,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.bram.setPosition(target.x, target.y);
     this.bram.setFacing(this.engine.bramFacing);
     this.renderDynamicCells();
+    this.renderCarriedOrbs();
     this.refreshHUD();
 
     if (this.moveCount > 0 && !this.hasShownUndoHint && this.room.hints.firstUndo) {
@@ -976,6 +1113,7 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     this.bram.setPosition(target.x, target.y);
     this.bram.setFacing(this.engine.bramFacing);
     this.renderDynamicCells();
+    this.renderCarriedOrbs();
     this.refreshHUD();
   }
 
@@ -1311,25 +1449,50 @@ export class GridPuzzleLabScene extends Phaser.Scene {
 
     this.tweens.add({ targets: [niloLine, bramLine], alpha: 1, duration: 300, delay: 220 });
 
-    // Sprite back button: real button image + label, hand cursor on hover.
-    this.makeSpriteButton(640, 510, 'Return to menu', depth + 4, () => this.exitToMenu());
+    // Three-button row at the bottom of the panel: Next (if any), Try
+    // again, Menu. Layout shifts based on whether a next puzzle exists.
+    const nextId = getNextRoomId(this.room.id);
+    const btnY = 540;
+    if (nextId) {
+      this.makeSmallStoneBtn(490, btnY, 'Try again', depth + 4, () => this.restartPuzzle());
+      this.makeSmallStoneBtn(640, btnY, 'Menu',       depth + 4, () => this.exitToMenu());
+      this.makeSmallStoneBtn(790, btnY, 'Next ▶',     depth + 4, () => this.startNextPuzzle(), true);
+    } else {
+      this.makeSmallStoneBtn(560, btnY, 'Try again', depth + 4, () => this.restartPuzzle());
+      this.makeSmallStoneBtn(720, btnY, 'Menu',       depth + 4, () => this.exitToMenu(), true);
+    }
     void [panel, banner, niloPortrait, bramPortrait];
   }
 
-  private makeSpriteButton(
-    cx: number, cy: number, label: string, depth: number, onClick: () => void
+  /**
+   * Compact success-panel button. Falls back to a procedural rounded-rect
+   * if BTN_BACK isn't loaded so the layout still works in the procedural
+   * fallback path.
+   */
+  private makeSmallStoneBtn(
+    cx: number, cy: number, label: string, depth: number,
+    onClick: () => void, primary = false
   ) {
-    const btn = this.add.image(cx - 110, cy, GridAssets.BTN_BACK)
-      .setScale(0.6).setDepth(depth);
-    const text = this.add.text(cx + 8, cy, label, {
-      fontFamily: 'Georgia, serif', fontSize: '22px',
-      color: '#2a1f12', fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(depth);
-    const hit = this.add.zone(cx, cy, 280, 60)
-      .setInteractive({ useHandCursor: true }).setDepth(depth);
-    hit.on('pointerover', () => { btn.setScale(0.66); text.setScale(1.04); });
-    hit.on('pointerout',  () => { btn.setScale(0.6);  text.setScale(1);    });
-    hit.on('pointerdown', onClick);
+    const w = 130, h = 48;
+    if (this.textures.exists(GridAssets.BTN_BACK)) {
+      const img = this.add.image(cx, cy, GridAssets.BTN_BACK)
+        .setDisplaySize(w, h)
+        .setDepth(depth)
+        .setAlpha(primary ? 1 : 0.92);
+      const text = this.add.text(cx, cy, label, {
+        fontFamily: 'Georgia, serif',
+        fontSize: primary ? '20px' : '18px',
+        color: '#2a1f12',
+        fontStyle: primary ? 'bold' : 'normal'
+      }).setOrigin(0.5).setDepth(depth + 1);
+      const hit = this.add.zone(cx, cy, w, h)
+        .setInteractive({ useHandCursor: true }).setDepth(depth + 2);
+      hit.on('pointerover', () => { img.setScale((w / img.width) * 1.05, (h / img.height) * 1.05); text.setScale(1.04); });
+      hit.on('pointerout',  () => { img.setDisplaySize(w, h); text.setScale(1); });
+      hit.on('pointerdown', onClick);
+    } else {
+      this.makeButton(cx - w / 2, cy - h / 2, w, h, label, depth, onClick);
+    }
   }
 
   private showSuccessProcedural(depth: number) {
@@ -1356,7 +1519,15 @@ export class GridPuzzleLabScene extends Phaser.Scene {
       fontSize: '22px', color: '#2a1f12'
     }).setOrigin(0.5).setDepth(depth + 2);
 
-    this.makeButton(480, 408, 320, 50, 'Return to menu', depth + 2, () => this.exitToMenu());
+    const nextId = getNextRoomId(this.room.id);
+    if (nextId) {
+      this.makeButton(380, 408, 150, 46, 'Try again', depth + 2, () => this.restartPuzzle());
+      this.makeButton(560, 408, 150, 46, 'Menu',       depth + 2, () => this.exitToMenu());
+      this.makeButton(740, 408, 160, 46, 'Next ▶',     depth + 2, () => this.startNextPuzzle());
+    } else {
+      this.makeButton(440, 408, 180, 50, 'Try again', depth + 2, () => this.restartPuzzle());
+      this.makeButton(660, 408, 180, 50, 'Menu',       depth + 2, () => this.exitToMenu());
+    }
   }
 
   private makeButton(
@@ -1379,10 +1550,30 @@ export class GridPuzzleLabScene extends Phaser.Scene {
     return { destroy() { bg.destroy(); text.destroy(); hit.destroy(); } };
   }
 
-  /** Stop ambient + transition back to menu. Shared exit path. */
+  /** Fade ambient + scene out, then transition back to menu. */
   private exitToMenu() {
-    AudioManager.stop(AudioKeys.AMBIENT_RATTLEWOOD);
-    this.scene.start('MenuScene');
+    AudioManager.fadeOut(AudioKeys.AMBIENT_RATTLEWOOD, 400);
+    this.cameras.main.fadeOut(400, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'));
+  }
+
+  /** Restart the current puzzle in a fresh scene instance (full reset). */
+  private restartPuzzle() {
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete',
+      () => this.scene.restart({ roomId: this.room.id })
+    );
+  }
+
+  /** Advance to the next puzzle in PUZZLE_PROGRESSION, if any. */
+  private startNextPuzzle() {
+    const nextId = getNextRoomId(this.room.id);
+    if (!nextId) { this.exitToMenu(); return; }
+    AudioManager.fadeOut(AudioKeys.AMBIENT_RATTLEWOOD, 300);
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete',
+      () => this.scene.start('GridPuzzleLabScene', { roomId: nextId })
+    );
   }
 
   // ─── backdrop ─────────────────────────────────────────────────────────────
